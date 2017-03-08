@@ -1,0 +1,42 @@
+<html>
+  <head>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" language="javascript" src="words.json"></script>
+   <script type='text/javascript'>
+      function Search() {
+          console.log("Searching...\n")
+          var count = 0;
+          var term=$("#keyword").val();
+          var result = $("#result");
+          if (term==""){
+              result.text("Specify something to search!");
+              return;
+          }
+          result.html("<p>Searching for "+term+"...</p>");
+          numbered_words.forEach(function(word){
+             if (word[1].includes(term)){
+                 result.append("<p>" + word + " includes " + term + "</p>");
+                 count += 1;
+             }
+          });
+        result.prepend("<p>Found "+count+" words</p>");
+      }
+    </script>
+
+   <script type="text/javascript">
+       $(document).ready(function(e) {
+           $("#ready").text("ready to search "+numbered_words.length + " words");
+       });
+   </script>
+
+
+  </head>
+  <body>
+    <form name="search" >
+      <input type="text" name="keyword" id="keyword" />
+    </form>
+    <button onclick="Search()">Search Already!</button>
+  <div id="ready">...</div>
+  <div id="result">    This result goes here.  </div>
+  </body>
+</html>
