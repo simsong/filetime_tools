@@ -6,26 +6,35 @@
       function Search() {
           console.log("Searching...\n")
           var count = 0;
-          var term=$("#keyword").val();
+          var term = $("#keyword").val();
           var result = $("#result");
-          if (term==""){
+          if (term == "") {
               result.text("Specify something to search!");
               return;
           }
-          result.html("<p>Searching for "+term+"...</p>");
-          numbered_words.forEach(function(word){
-             if (word[1].includes(term)){
-                 result.append("<p>" + word + " includes " + term + "</p>");
-                 count += 1;
-             }
+          result.html("<p>Searching for " + term + "...</p>");
+          var res = ""
+          numbered_words.forEach(function (word) {
+              if (word[1].includes(term)) {
+                  res += word + " includes " + term + "<br/>";
+                  count += 1;
+              }
           });
-        result.prepend("<p>Found "+count+" words</p>");
+          if (count < 100) {
+          res = "<p>Words found: " + count + "<br/>" + res + "</p>";
+          } else {
+              res = "<p>Words found: " + count + " </p>";
+          }
+          result.html(res);
       }
     </script>
 
    <script type="text/javascript">
        $(document).ready(function(e) {
            $("#ready").text("ready to search "+numbered_words.length + " words");
+           $("#keyword").keyup(function () {
+              Search();
+           });
        });
    </script>
 
