@@ -3,17 +3,17 @@
 #
 # File change detector
 
-__version__='0.0.1'
-import os.path,sys
+__version__ = '0.0.1'
+import os.path, sys
 
-import os,sys,re,collections,sqlite3
+import os, sys, re, collections, sqlite3
 import datetime
 
 CACHE_SIZE = 2000000
 
 # Replace this with an ORM?
 schema = \
-"""
+    """
 CREATE TABLE IF NOT EXISTS files (fileid INTEGER PRIMARY KEY,
                                   pathid INTEGER NOT NULL,
                                   mtime TIMET NOT NULL, 
@@ -55,22 +55,37 @@ files         - list of all files
 hashes       - table of all hash code
 """
 
-COMMIT_RATE = 10                # commit every 10 directories
+COMMIT_RATE = 10  # commit every 10 directories
+
 
 def create_schema(conn):
     # If the schema doesn't exist, create it
     c = conn.cursor()
     for line in schema.split(";"):
-        print(line,end="")
+        print(line, end="")
         c.execute(line)
+
 
 def iso_now():
     return datetime.datetime.now().isoformat()[0:19]
 
+
+def execselect(conn, sql, vals):
+    """Execute a SQL query and return the first line"""
+    c = conn.cursor()
+    c.execute(sql, vals)
+    return c.fetchone()
+
+
+#################### END SQL PACKAGE ####################
+#########################################################
+
+
 def hash_file(path):
+    """High performance file hasher"""
     from hashlib import md5
     m = md5()
-    with open(path,"rb") as f:
+    with open(path, "rb") as f:
         while True:
             buf = f.read(65535)
             if buf:
@@ -78,69 +93,83 @@ def hash_file(path):
             else:
                 break
     return m.hexdigest()
-        
 
+
+#
+# Methods that return File(pathid,dirname,filename) for searches
+#
+class File:
+    __slots__ = ['pathid', 'dirnameid', 'dirname', 'filenameid', 'filename', 'size']
+
+    def __init__(self, pathid=None, dirnameid=None, dirname=None, filenameid=None, filename=None, size=None):
+        self.pathid = pathid
+        self.dirnameid = dirnameid
+        self.dirname = dirname
+        self.filenameid = filenameid
+        self.filename = filename
+        self.size     = size
+
+
+############################################################
 class Scanner(object):
-    def __init__(self,conn):
+    def __init__(self, conn):
         self.conn = conn
         self.c = self.conn.cursor()
 
-    def get_hashid(self,hash):
-        self.c.execute("INSERT or IGNORE INTO hashes (hash) VALUES (?);",(hash,))
-        self.c.execute("SELECT hashid from hashes where hash=?",(hash,))
+    def get_hashid(self, hash):
+        self.c.execute("INSERT or IGNORE INTO hashes (hash) VALUES (?);", (hash,))
+        self.c.execute("SELECT hashid FROM hashes WHERE hash=?", (hash,))
         return self.c.fetchone()[0]
 
-    def get_scanid(self,now):
-        self.c.execute("INSERT or IGNORE INTO scans (time) VALUES (?);",(now,))
-        self.c.execute("SELECT scanid from scans where time=?",(now,))
+    def get_scanid(self, now):
+        self.c.execute("INSERT or IGNORE INTO scans (time) VALUES (?);", (now,))
+        self.c.execute("SELECT scanid FROM scans WHERE time=?", (now,))
         return self.c.fetchone()[0]
 
-    def get_pathid(self,path):
-        (dirname,filename) = os.path.split(path)
+    def get_pathid(self, path):
+        (dirname, filename) = os.path.split(path)
         # dirname
-        self.c.execute("INSERT or IGNORE INTO dirnames (dirname) VALUES (?);",(dirname,))
-        self.c.execute("SELECT dirnameid from dirnames where dirname=?",(dirname,))
+        self.c.execute("INSERT or IGNORE INTO dirnames (dirname) VALUES (?);", (dirname,))
+        self.c.execute("SELECT dirnameid FROM dirnames WHERE dirname=?", (dirname,))
         dirnameid = self.c.fetchone()[0]
 
         # filename
-        self.c.execute("INSERT or IGNORE INTO filenames (filename) VALUES (?);",(filename,))
-        self.c.execute("SELECT filenameid from filenames where filename=?",(filename,))
+        self.c.execute("INSERT or IGNORE INTO filenames (filename) VALUES (?);", (filename,))
+        self.c.execute("SELECT filenameid FROM filenames WHERE filename=?", (filename,))
         filenameid = self.c.fetchone()[0]
 
         # pathid
-        self.c.execute("INSERT or IGNORE INTO paths (dirnameid,filenameid) VALUES (?,?);",(dirnameid,filenameid,))
-        self.c.execute("SELECT pathid from paths where dirnameid=? and filenameid=?",(dirnameid,filenameid,))
-        return self.c.fetchone()[0]        
+        self.c.execute("INSERT or IGNORE INTO paths (dirnameid,filenameid) VALUES (?,?);", (dirnameid, filenameid,))
+        self.c.execute("SELECT pathid FROM paths WHERE dirnameid=? AND filenameid=?", (dirnameid, filenameid,))
+        return self.c.fetchone()[0]
 
-    def process_path(self,scanid,path):
+    def process_path(self, scanid, path):
         """ Add the file to the database database.
         If it is there and the mtime hasn't been changed, don't re-hash."""
 
         try:
             st = os.stat(path)
         except FileNotFoundError as e:
-            return 
+            return
         pathid = self.get_pathid(path)
-        
+
         # See if this file with this length is in the databsae
-        self.c.execute("SELECT hashid from files where pathid=? and mtime=? and size=? LIMIT 1",
-                       (pathid,st.st_mtime,st.st_size))
+        self.c.execute("SELECT hashid FROM files WHERE pathid=? AND mtime=? AND size=? LIMIT 1",
+                       (pathid, st.st_mtime, st.st_size))
         row = self.c.fetchone()
         try:
             if row:
                 (hashid,) = row
             else:
                 hashid = self.get_hashid(hash_file(path))
-            self.c.execute("INSERT into files (pathid,mtime,size,hashid,scanid) values (?,?,?,?,?)",
-                           (pathid,st.st_mtime,st.st_size,hashid,scanid))
+            self.c.execute("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (?,?,?,?,?)",
+                           (pathid, st.st_mtime, st.st_size, hashid, scanid))
         except PermissionError as e:
             pass
         except OSError as e:
             pass
-        except FileNotFoundError as e:
-            pass
 
-    def ingest(self,root):
+    def ingest(self, root):
         import time
 
         self.c = self.conn.cursor()
@@ -152,93 +181,184 @@ class Scanner(object):
         dircount = 0
         t0 = time.time()
         for (dirpath, dirnames, filenames) in os.walk(root):
-            print(dirpath,end='')
+            print(dirpath, end='')
             for filename in filenames:
-                self.process_path(scanid,os.path.join(dirpath,filename))
+                self.process_path(scanid, os.path.join(dirpath, filename))
             print("   {}".format(len(filenames)))
             count += len(filenames)
             dircount += 1
-            if dircount % COMMIT_RATE==0:
+            if dircount % COMMIT_RATE == 0:
                 self.conn.commit()
 
         self.conn.commit()
         t1 = time.time()
-        self.c.execute("UPDATE scans set duration=? where scanid=?",(t1-t0,scanid)) 
+        self.c.execute("UPDATE scans SET duration=? WHERE scanid=?", (t1 - t0, scanid))
         print("Total files added to database: {}".format(count))
         print("Total directories scanned:     {}".format(dircount))
-        print("Total time: {}".format(int(t1-t0)))
+        print("Total time: {}".format(int(t1 - t0)))
 
-def get_pathname(conn,pathid):
+
+###################### END OF SCANNER CLASS ######################
+##################################################################
+
+
+def get_pathname(conn, pathid):
     c = conn.cursor()
     c.execute("SELECT fileid,dirname,filename FROM files " +
               "NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames " +
-              "where fileid=?",(pathid,))
-    (fileid,dirname,filename) = c.fetchone()
+              "WHERE fileid=?", (pathid,))
+    (fileid, dirname, filename) = c.fetchone()
     return dirname + filename
 
-def dump(conn,what):
+
+def scans(conn):
     c = conn.cursor()
-    for (scanid,time) in c.execute("select scanid,time from scans"):
-        print(scanid,time)
+    for (scanid, time) in c.execute("SELECT scanid,time FROM scans"):
+        print(scanid, time)
 
-def execselect(conn,sql,vals):
-    c= conn.cursor()
-    c.execute(sql,vals)
-    return c.fetchone()
 
-def report(conn,a,b):
-    atime = execselect(conn,"select time from scans where scanid=?",(a,))[0]
-    btime = execselect(conn,"select time from scans where scanid=?",(b,))[0]
-    print("Report from {}->{}".format(atime,btime))
+def new_files(conn, scan0, scan1):
+    """Files in scan scan1 that are not in scan scan0"""
+    c = conn.cursor()
+    c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename "
+              "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+              "where scanid=? and pathid not in (select pathid from files where scanid=?)", (scan1, scan0))
+    return (File(pathid=f[0], dirnameid=f[1], dirname=f[2], filenameid=f[3], filename=f[4]) for f in c)
+
+
+def deleted_files(conn, scan0, scan1):
+    """Files in scan scan1 that are not in scan0"""
+    return new_files(conn, scan1, scan0)
+
+
+def changed_files(conn, scan0, scan1):
+    """Files that were changed between scan0 and scan1"""
+    c = conn.cursor()
+    c.execute("SELECT a.pathid,a.hashid,b.hashid FROM " +
+              "( SELECT pathid, hashid, scanid FROM files WHERE scanid=?) AS 'a' " +
+              "JOIN (SELECT pathid, hashid, scanid FROM FILES WHERE scanid=?) as 'b' " +
+              "ON a.pathid=b.pathid WHERE a.hashid != b.hashid",
+              (scan0, scan1))
+    return (File(pathid=f[0]) for f in c)
+
+def duplicate_files(conn, scan0):
+    """Return a generator for the duplicate files at scan0.
+    Returns a list of a list of File objects, sorted by size"""
+    c = conn.cursor()
+    d = conn.cursor()
+    c.execute('select hashid, ct, size from '
+              '(select hashid, count(*) as ct, size from files '
+              'where scanid=? group by hashid) natural join hashes where ct>1 order by 3 desc;', (scan0,))
+    for (hashid, ct, size) in c:
+        ret = []
+        d.execute(
+            "SELECT dirnameid,dirname,filenameid,filename "
+            "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+            "WHERE scanid=? AND hashid=?", (scan0, hashid,))
+        yield [File(size=size, dirnameid=f[0], dirname=f[1], filenameid=f[2], filename=f[3]) for f in d]
+
+
+# This is what I am trying to accomplish:
+"""
+select hashid,pathid,count(*) as ctb from files where
+scanid=2 and hashid in
+(select hashid from
+   (select hashid, count(*) as cta from files where scanid=1 group by hashid having cta=1)
+)
+group by hashid having ctb=1;
+"""
+
+"""
+Better approach:
+* Get a list of all the (hashid, pathid1) pairs from scan1 that have only a single pathid for the scan.
+* Get a list of all the (hashid, pathid2) pairs from scan2 that have only a single pathid for the scan.
+* remove from (hashid, pathid2) all that are in (hashid, pathid1)
+ """
+
+
+def renamed_files(conn, scan1, scan2):
+    """Return a generator for the duplicate files at scan0.
+    Returns a list of a list of File objects that were renamed from scan0 to scan1"""
+
+    def get_singletons(conn,scanid):
+        c = conn.cursor()
+        c.execute('select hashID, pathid, count(*) as ct '
+                  'from files where scanid=? GROUP BY hashid HAVING ct=1',(scanid,))
+        return c
+
+    pairs_in_scan1 = set()
+    path1_for_hash = {}
+    for (hashID, path1, count) in get_singletons(conn,scan1):
+        pairs_in_scan1.add((hashID,path1))
+        path1_for_hash[hashID] = path1
+
+    ret = []
+    for (hashID, path2, count) in get_singletons(conn, scan2):
+        if hashID in path1_for_hash and (hashID,path2) not in pairs_in_scan1:
+            ret.append((hashID,path1_for_hash[hashID],path2))
+    return ret
+
+
+def changed(conn, fname):
+    """Generate a database object of what's changed."""
+    (now, nowid) = execselect(conn, "SELECT time,scanid FROM scans WHERE scanid=max(scanid)")
+    (yesterday, yid) = execselect(conn, "SELECT time,scanid FROM scans WHERE scanid=max(scanid)")
+
+
+def report(conn, a, b):
+    atime = execselect(conn, "SELECT time FROM scans WHERE scanid=?", (a,))[0]
+    btime = execselect(conn, "SELECT time FROM scans WHERE scanid=?", (b,))[0]
+    print("Report from {}->{}".format(atime, btime))
+
+    renamed_files(conn, a, b)
+    exit(0)
 
     print("\n")
     print("New files:")
-    c = conn.cursor()
-    c.execute("SELECT pathid, dirname, filename FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames " +
-              "where scanid=2 and pathid not in (select pathid from files where scanid=1)")
-    for (pathid, dirname, filename) in c:
-        print(dirname+filename)
+    for f in new_files(conn, a, b):
+        print(f.dirname + f.filename)
 
     print("\n")
     print("Deleted files:")
     c = conn.cursor()
-    c.execute("select pathid, dirname, filename FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames " +
-              "where scanid=1 and pathid not in (select pathid from files where scanid=2)")
+    c.execute(
+        "SELECT pathid, dirname, filename FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+        "WHERE scanid=1 AND pathid NOT IN (SELECT pathid FROM files WHERE scanid=2)")
     for (pathid, dirname, filename) in c:
-        print(dirname+filename)
+        print(dirname + filename)
 
     print("\n")
     print("Changed files:")
-    c = conn.cursor()
-    c.execute("SELECT a.pathid,a.hashid,b.hashid FROM (SELECT pathid, hashid, scanid FROM files WHERE scanid=1) AS 'a' " +
-              "JOIN (SELECT pathid, hashid, scanid FROM FILES WHERE scanid=2) as 'b' " +
-              "ON a.pathid=b.pathid WHERE a.hashid != b.hashid")
-    for (pathid,hash1,hash2) in c:
-        print(get_pathname(conn,pathid))
+    for f in changed_files(conn, a, b):
+        print(get_pathname(conn, pathid))
 
     print("Renamed files:")
     print("Duplicate files:")
-    c = conn.cursor()
-    d = conn.cursor()
-    c.execute("select hashid,ct from (select hashid ,count(*) as ct from files where scanid=? group by hashid) natural join hashes where ct>1;",(b,))
-    for (hashid,ct) in c:
-        d.execute("SELECT dirname,filename FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames " +
-                  "WHERE scanid=? and hashid=?",(b,hashid,))
-        for (dirname,filename) in d:
-            print(dirname+filename)
-        print("-----------")
-        
 
-if(__name__=="__main__"):
+    # for (dirname, filename) in d:
+
+
+def report_dups(conn, scan0):
+    for dups in duplicate_files(conn, scan0):
+        print("Filesize: {:,}  Count: {}".format(dups[0].size, len(dups)))
+        for dup in dups:
+            print("    " + dup.dirname + "/" + dup.filename)
+    print("\n-----------")
+
+
+if (__name__ == "__main__"):
     import argparse
+
     parser = argparse.ArgumentParser(description='Compute file changes',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('roots', type=str, nargs='*', help='Directories to process')
-    parser.add_argument("--debug",action="store_true")
-    parser.add_argument("--create",action="store_true",help="Create database")
-    parser.add_argument("--db",help="Specify database location",default="data.sqlite3")
-    parser.add_argument("--dump",help="[scans]")
-    parser.add_argument("--report",help="Report what's changed between scans A and B (e.g. A-B)")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--create", action="store_true", help="Create database")
+    parser.add_argument("--db", help="Specify database location", default="data.sqlite3")
+    parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
+    parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
+    parser.add_argument("--jchanged", help="Create 'what's changed?' json database object")
+    parser.add_argument("--dups", help="Report duplicates for a scan")
 
     args = parser.parse_args()
 
@@ -251,21 +371,28 @@ if(__name__=="__main__"):
         create_schema(conn)
         print("Created")
 
-    if args.dump:
-        dump(sqlite3.connect(args.db),args.dump)
+    if args.scans:
+        scans(sqlite3.connect(args.db))
         exit(0)
 
     # give me a big cache
     conn = sqlite3.connect(args.db)
-    conn.cursor().execute("PRAGMA cache_size = {};".format(CACHE_SIZE)) 
+    conn.cursor().execute("PRAGMA cache_size = {};".format(CACHE_SIZE))
 
     if args.report:
-        m = re.search("(\d+)-(\d+)",args.report)
+        m = re.search("(\d+)-(\d+)", args.report)
         if not m:
             print("Usage: --report N-M")
             exit(1)
-        report(conn,int(m.group(1)),int(m.group(2)))
+        for line in renamed_files(conn,int(m.group(1)), int(m.group(2))):
+            print(line)
+        report(conn, int(m.group(1)), int(m.group(2)))
 
+    if args.dups:
+        report_dups(conn, int(args.dups))
+
+    if args.jchanged:
+        changed(conn, args.changed)
 
     if args.roots:
         s = Scanner(conn)
