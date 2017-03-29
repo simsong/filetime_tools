@@ -2,8 +2,6 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="1578394f-d2bb-4caf-ad47-cc481d81b887" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/.idea/sqldialects.xml" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/.idea/vcs.xml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fchange.py" afterPath="$PROJECT_DIR$/fchange.py" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -40,58 +38,59 @@
       <file leaf-file-name="fchange.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/fchange.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="431">
-              <caret line="296" column="40" lean-forward="false" selection-start-line="296" selection-start-column="40" selection-end-line="296" selection-end-column="40" />
+            <state relative-caret-position="255">
+              <caret line="83" column="38" lean-forward="true" selection-start-line="83" selection-start-column="38" selection-end-line="83" selection-end-column="38" />
               <folding>
-                <marker date="1490457056000" expanded="true" signature="234:588" ph="CREATE TABLE... IF" />
-                <marker date="1490457056000" expanded="true" signature="590:644" ph="CREATE INDEX... files_idx0" />
-                <marker date="1490457056000" expanded="true" signature="646:700" ph="CREATE INDEX... files_idx1" />
-                <marker date="1490457056000" expanded="true" signature="702:755" ph="CREATE INDEX... files_idx2" />
-                <marker date="1490457056000" expanded="true" signature="757:809" ph="CREATE INDEX... files_idx3" />
-                <marker date="1490457056000" expanded="true" signature="811:865" ph="CREATE INDEX... files_idx4" />
-                <marker date="1490457056000" expanded="true" signature="867:921" ph="CREATE INDEX... files_idx5" />
-                <marker date="1490457056000" expanded="true" signature="924:1041" ph="CREATE TABLE... IF" />
-                <marker date="1490457056000" expanded="true" signature="1043:1097" ph="CREATE INDEX... paths_idx1" />
-                <marker date="1490457056000" expanded="true" signature="1099:1156" ph="CREATE INDEX... paths_idx2" />
-                <marker date="1490457056000" expanded="true" signature="1158:1216" ph="CREATE INDEX... paths_idx3" />
-                <marker date="1490457056000" expanded="true" signature="1219:1315" ph="CREATE TABLE... IF" />
-                <marker date="1490457056000" expanded="true" signature="1317:1380" ph="CREATE INDEX... dirnames_idx1" />
-                <marker date="1490457056000" expanded="true" signature="1382:1443" ph="CREATE INDEX... dirnames_idx2" />
-                <marker date="1490457056000" expanded="true" signature="1446:1545" ph="CREATE TABLE... IF" />
-                <marker date="1490457056000" expanded="true" signature="1547:1613" ph="CREATE INDEX... filenames_idx1" />
-                <marker date="1490457056000" expanded="true" signature="1615:1679" ph="CREATE INDEX... filenames_idx2" />
-                <marker date="1490457056000" expanded="true" signature="1682:1770" ph="CREATE TABLE... IF" />
-                <marker date="1490457056000" expanded="true" signature="1772:1828" ph="CREATE INDEX... hashes_idx1" />
-                <marker date="1490457056000" expanded="true" signature="1830:1884" ph="CREATE INDEX... hashes_idx2" />
-                <marker date="1490457056000" expanded="true" signature="1887:1995" ph="CREATE TABLE... IF" />
-                <marker date="1490457056000" expanded="true" signature="1997:2051" ph="CREATE INDEX... scans_idx1" />
-                <marker date="1490457056000" expanded="true" signature="2053:2105" ph="CREATE INDEX... scans_idx2" />
-                <marker date="1490457056000" expanded="true" signature="3889:3927" ph="SELECT hashi... hashes" />
-                <marker date="1490457056000" expanded="true" signature="4112:4149" ph="SELECT scani... scans" />
-                <marker date="1490457056000" expanded="true" signature="4412:4458" ph="SELECT dirna... dirnames" />
-                <marker date="1490457056000" expanded="true" signature="4652:4701" ph="SELECT filen... filenames" />
-                <marker date="1490457056000" expanded="true" signature="4918:4977" ph="SELECT pathi... paths" />
-                <marker date="1490457056000" expanded="true" signature="5442:5512" ph="SELECT hashi... files" />
-                <marker date="1490457056000" expanded="true" signature="5774:5844" ph="INSERT into files... " />
-                <marker date="1490457056000" expanded="true" signature="6743:6785" ph="UPDATE scans... " />
-                <marker date="1490457056000" expanded="true" signature="7200:7358" ph="SELECT filei... files" />
-                <marker date="1490457056000" expanded="true" signature="7527:7556" ph="select scani... " />
-                <marker date="1490457056000" expanded="true" signature="7719:7958" ph="SELECT pathi... files" />
-                <marker date="1490457056000" expanded="true" signature="7918:7957" ph="select pathi... files" />
-                <marker date="1490457056000" expanded="true" signature="8923:9112" ph="select hashi... hashid" />
-                <marker date="1490457056000" expanded="true" signature="8970:9064" ph="select hashi... files" />
-                <marker date="1490457056000" expanded="true" signature="9208:9385" ph="SELECT dirna... files" />
-                <marker date="1490457056000" expanded="true" signature="9559:9777" ph="select hashi... files" />
-                <marker date="1490457056000" expanded="true" signature="9637:9746" ph="select hashi... hashid" />
-                <marker date="1490457056000" expanded="true" signature="9660:9745" ph="select hashi... files" />
-                <marker date="1490457056000" expanded="true" signature="10354:10438" ph="select hashI... files" />
-                <marker date="1490457056000" expanded="true" signature="10354:10466" ph="select hashI... files" />
-                <marker date="1490457056000" expanded="true" signature="11045:11099" ph="select time,... " />
-                <marker date="1490457056000" expanded="true" signature="11143:11197" ph="select time,... " />
-                <marker date="1490457056000" expanded="true" signature="11256:11293" ph="select time " />
-                <marker date="1490457056000" expanded="true" signature="11335:11372" ph="select time " />
-                <marker date="1490457056000" expanded="true" signature="11686:11879" ph="select pathi... files" />
-                <marker date="1490457056000" expanded="true" signature="11839:11878" ph="select pathi... files" />
+                <element signature="e#86#105#0" expanded="true" />
+                <marker date="1490458922000" expanded="true" signature="215:569" ph="CREATE TABLE... IF" />
+                <marker date="1490458922000" expanded="true" signature="571:625" ph="CREATE INDEX... files_idx0" />
+                <marker date="1490458922000" expanded="true" signature="627:681" ph="CREATE INDEX... files_idx1" />
+                <marker date="1490458922000" expanded="true" signature="683:736" ph="CREATE INDEX... files_idx2" />
+                <marker date="1490458922000" expanded="true" signature="738:790" ph="CREATE INDEX... files_idx3" />
+                <marker date="1490458922000" expanded="true" signature="792:846" ph="CREATE INDEX... files_idx4" />
+                <marker date="1490458922000" expanded="true" signature="848:902" ph="CREATE INDEX... files_idx5" />
+                <marker date="1490458922000" expanded="true" signature="905:1022" ph="CREATE TABLE... IF" />
+                <marker date="1490458922000" expanded="true" signature="1024:1078" ph="CREATE INDEX... paths_idx1" />
+                <marker date="1490458922000" expanded="true" signature="1080:1137" ph="CREATE INDEX... paths_idx2" />
+                <marker date="1490458922000" expanded="true" signature="1139:1197" ph="CREATE INDEX... paths_idx3" />
+                <marker date="1490458922000" expanded="true" signature="1200:1296" ph="CREATE TABLE... IF" />
+                <marker date="1490458922000" expanded="true" signature="1298:1361" ph="CREATE INDEX... dirnames_idx1" />
+                <marker date="1490458922000" expanded="true" signature="1363:1424" ph="CREATE INDEX... dirnames_idx2" />
+                <marker date="1490458922000" expanded="true" signature="1427:1526" ph="CREATE TABLE... IF" />
+                <marker date="1490458922000" expanded="true" signature="1528:1594" ph="CREATE INDEX... filenames_idx1" />
+                <marker date="1490458922000" expanded="true" signature="1596:1660" ph="CREATE INDEX... filenames_idx2" />
+                <marker date="1490458922000" expanded="true" signature="1663:1751" ph="CREATE TABLE... IF" />
+                <marker date="1490458922000" expanded="true" signature="1753:1809" ph="CREATE INDEX... hashes_idx1" />
+                <marker date="1490458922000" expanded="true" signature="1811:1865" ph="CREATE INDEX... hashes_idx2" />
+                <marker date="1490458922000" expanded="true" signature="1868:1976" ph="CREATE TABLE... IF" />
+                <marker date="1490458922000" expanded="true" signature="1978:2032" ph="CREATE INDEX... scans_idx1" />
+                <marker date="1490458922000" expanded="true" signature="2034:2086" ph="CREATE INDEX... scans_idx2" />
+                <marker date="1490458922000" expanded="true" signature="3866:3904" ph="SELECT hashi... hashes" />
+                <marker date="1490458922000" expanded="true" signature="4089:4126" ph="SELECT scani... scans" />
+                <marker date="1490458922000" expanded="true" signature="4389:4435" ph="SELECT dirna... dirnames" />
+                <marker date="1490458922000" expanded="true" signature="4629:4678" ph="SELECT filen... filenames" />
+                <marker date="1490458922000" expanded="true" signature="4895:4954" ph="SELECT pathi... paths" />
+                <marker date="1490458922000" expanded="true" signature="5419:5489" ph="SELECT hashi... files" />
+                <marker date="1490458922000" expanded="true" signature="5751:5821" ph="INSERT into files... " />
+                <marker date="1490458922000" expanded="true" signature="6720:6762" ph="UPDATE scans... " />
+                <marker date="1490458922000" expanded="true" signature="7177:7335" ph="SELECT filei... files" />
+                <marker date="1490458922000" expanded="true" signature="7504:7533" ph="select scani... " />
+                <marker date="1490458922000" expanded="true" signature="7696:7935" ph="SELECT pathi... files" />
+                <marker date="1490458922000" expanded="true" signature="7895:7934" ph="select pathi... files" />
+                <marker date="1490458922000" expanded="true" signature="8901:9090" ph="select hashi... hashid" />
+                <marker date="1490458922000" expanded="true" signature="8948:9042" ph="select hashi... files" />
+                <marker date="1490458922000" expanded="true" signature="9186:9363" ph="SELECT dirna... files" />
+                <marker date="1490458922000" expanded="true" signature="9537:9755" ph="select hashi... files" />
+                <marker date="1490458922000" expanded="true" signature="9615:9724" ph="select hashi... hashid" />
+                <marker date="1490458922000" expanded="true" signature="9638:9723" ph="select hashi... files" />
+                <marker date="1490458922000" expanded="true" signature="10333:10417" ph="select hashI... files" />
+                <marker date="1490458922000" expanded="true" signature="10333:10445" ph="select hashI... files" />
+                <marker date="1490458922000" expanded="true" signature="11030:11084" ph="select time,... " />
+                <marker date="1490458922000" expanded="true" signature="11128:11182" ph="select time,... " />
+                <marker date="1490458922000" expanded="true" signature="11241:11278" ph="select time " />
+                <marker date="1490458922000" expanded="true" signature="11320:11357" ph="select time " />
+                <marker date="1490458922000" expanded="true" signature="11628:11821" ph="select pathi... files" />
+                <marker date="1490458922000" expanded="true" signature="11781:11820" ph="select pathi... files" />
               </folding>
             </state>
           </provider>
@@ -454,55 +453,56 @@
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <marker date="1490457056000" expanded="true" signature="234:588" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="590:644" ph="CREATE INDEX... files_idx0" />
-            <marker date="1490457056000" expanded="true" signature="646:700" ph="CREATE INDEX... files_idx1" />
-            <marker date="1490457056000" expanded="true" signature="702:755" ph="CREATE INDEX... files_idx2" />
-            <marker date="1490457056000" expanded="true" signature="757:809" ph="CREATE INDEX... files_idx3" />
-            <marker date="1490457056000" expanded="true" signature="811:865" ph="CREATE INDEX... files_idx4" />
-            <marker date="1490457056000" expanded="true" signature="867:921" ph="CREATE INDEX... files_idx5" />
-            <marker date="1490457056000" expanded="true" signature="924:1041" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1043:1097" ph="CREATE INDEX... paths_idx1" />
-            <marker date="1490457056000" expanded="true" signature="1099:1156" ph="CREATE INDEX... paths_idx2" />
-            <marker date="1490457056000" expanded="true" signature="1158:1216" ph="CREATE INDEX... paths_idx3" />
-            <marker date="1490457056000" expanded="true" signature="1219:1315" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1317:1380" ph="CREATE INDEX... dirnames_idx1" />
-            <marker date="1490457056000" expanded="true" signature="1382:1443" ph="CREATE INDEX... dirnames_idx2" />
-            <marker date="1490457056000" expanded="true" signature="1446:1545" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1547:1613" ph="CREATE INDEX... filenames_idx1" />
-            <marker date="1490457056000" expanded="true" signature="1615:1679" ph="CREATE INDEX... filenames_idx2" />
-            <marker date="1490457056000" expanded="true" signature="1682:1770" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1772:1828" ph="CREATE INDEX... hashes_idx1" />
-            <marker date="1490457056000" expanded="true" signature="1830:1884" ph="CREATE INDEX... hashes_idx2" />
-            <marker date="1490457056000" expanded="true" signature="1887:1995" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1997:2051" ph="CREATE INDEX... scans_idx1" />
-            <marker date="1490457056000" expanded="true" signature="2053:2105" ph="CREATE INDEX... scans_idx2" />
-            <marker date="1490457056000" expanded="true" signature="3889:3927" ph="SELECT hashi... hashes" />
-            <marker date="1490457056000" expanded="true" signature="4112:4149" ph="SELECT scani... scans" />
-            <marker date="1490457056000" expanded="true" signature="4412:4458" ph="SELECT dirna... dirnames" />
-            <marker date="1490457056000" expanded="true" signature="4652:4701" ph="SELECT filen... filenames" />
-            <marker date="1490457056000" expanded="true" signature="4918:4977" ph="SELECT pathi... paths" />
-            <marker date="1490457056000" expanded="true" signature="5442:5512" ph="SELECT hashi... files" />
-            <marker date="1490457056000" expanded="true" signature="5774:5844" ph="INSERT into files... " />
-            <marker date="1490457056000" expanded="true" signature="6743:6785" ph="UPDATE scans... " />
-            <marker date="1490457056000" expanded="true" signature="7200:7358" ph="SELECT filei... files" />
-            <marker date="1490457056000" expanded="true" signature="7527:7556" ph="select scani... " />
-            <marker date="1490457056000" expanded="true" signature="7719:7958" ph="SELECT pathi... files" />
-            <marker date="1490457056000" expanded="true" signature="7918:7957" ph="select pathi... files" />
-            <marker date="1490457056000" expanded="true" signature="8923:9112" ph="select hashi... hashid" />
-            <marker date="1490457056000" expanded="true" signature="8970:9064" ph="select hashi... files" />
-            <marker date="1490457056000" expanded="true" signature="9208:9385" ph="SELECT dirna... files" />
-            <marker date="1490457056000" expanded="true" signature="9559:9777" ph="select hashi... files" />
-            <marker date="1490457056000" expanded="true" signature="9637:9746" ph="select hashi... hashid" />
-            <marker date="1490457056000" expanded="true" signature="9660:9745" ph="select hashi... files" />
-            <marker date="1490457056000" expanded="true" signature="10354:10438" ph="select hashI... files" />
-            <marker date="1490457056000" expanded="true" signature="10354:10466" ph="select hashI... files" />
-            <marker date="1490457056000" expanded="true" signature="11045:11099" ph="select time,... " />
-            <marker date="1490457056000" expanded="true" signature="11143:11197" ph="select time,... " />
-            <marker date="1490457056000" expanded="true" signature="11256:11293" ph="select time " />
-            <marker date="1490457056000" expanded="true" signature="11335:11372" ph="select time " />
-            <marker date="1490457056000" expanded="true" signature="11686:11879" ph="select pathi... files" />
-            <marker date="1490457056000" expanded="true" signature="11839:11878" ph="select pathi... files" />
+            <element signature="e#86#105#0" expanded="true" />
+            <marker date="1490458922000" expanded="true" signature="215:569" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="571:625" ph="CREATE INDEX... files_idx0" />
+            <marker date="1490458922000" expanded="true" signature="627:681" ph="CREATE INDEX... files_idx1" />
+            <marker date="1490458922000" expanded="true" signature="683:736" ph="CREATE INDEX... files_idx2" />
+            <marker date="1490458922000" expanded="true" signature="738:790" ph="CREATE INDEX... files_idx3" />
+            <marker date="1490458922000" expanded="true" signature="792:846" ph="CREATE INDEX... files_idx4" />
+            <marker date="1490458922000" expanded="true" signature="848:902" ph="CREATE INDEX... files_idx5" />
+            <marker date="1490458922000" expanded="true" signature="905:1022" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1024:1078" ph="CREATE INDEX... paths_idx1" />
+            <marker date="1490458922000" expanded="true" signature="1080:1137" ph="CREATE INDEX... paths_idx2" />
+            <marker date="1490458922000" expanded="true" signature="1139:1197" ph="CREATE INDEX... paths_idx3" />
+            <marker date="1490458922000" expanded="true" signature="1200:1296" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1298:1361" ph="CREATE INDEX... dirnames_idx1" />
+            <marker date="1490458922000" expanded="true" signature="1363:1424" ph="CREATE INDEX... dirnames_idx2" />
+            <marker date="1490458922000" expanded="true" signature="1427:1526" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1528:1594" ph="CREATE INDEX... filenames_idx1" />
+            <marker date="1490458922000" expanded="true" signature="1596:1660" ph="CREATE INDEX... filenames_idx2" />
+            <marker date="1490458922000" expanded="true" signature="1663:1751" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1753:1809" ph="CREATE INDEX... hashes_idx1" />
+            <marker date="1490458922000" expanded="true" signature="1811:1865" ph="CREATE INDEX... hashes_idx2" />
+            <marker date="1490458922000" expanded="true" signature="1868:1976" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1978:2032" ph="CREATE INDEX... scans_idx1" />
+            <marker date="1490458922000" expanded="true" signature="2034:2086" ph="CREATE INDEX... scans_idx2" />
+            <marker date="1490458922000" expanded="true" signature="3866:3904" ph="SELECT hashi... hashes" />
+            <marker date="1490458922000" expanded="true" signature="4089:4126" ph="SELECT scani... scans" />
+            <marker date="1490458922000" expanded="true" signature="4389:4435" ph="SELECT dirna... dirnames" />
+            <marker date="1490458922000" expanded="true" signature="4629:4678" ph="SELECT filen... filenames" />
+            <marker date="1490458922000" expanded="true" signature="4895:4954" ph="SELECT pathi... paths" />
+            <marker date="1490458922000" expanded="true" signature="5419:5489" ph="SELECT hashi... files" />
+            <marker date="1490458922000" expanded="true" signature="5751:5821" ph="INSERT into files... " />
+            <marker date="1490458922000" expanded="true" signature="6720:6762" ph="UPDATE scans... " />
+            <marker date="1490458922000" expanded="true" signature="7177:7335" ph="SELECT filei... files" />
+            <marker date="1490458922000" expanded="true" signature="7504:7533" ph="select scani... " />
+            <marker date="1490458922000" expanded="true" signature="7696:7935" ph="SELECT pathi... files" />
+            <marker date="1490458922000" expanded="true" signature="7895:7934" ph="select pathi... files" />
+            <marker date="1490458922000" expanded="true" signature="8901:9090" ph="select hashi... hashid" />
+            <marker date="1490458922000" expanded="true" signature="8948:9042" ph="select hashi... files" />
+            <marker date="1490458922000" expanded="true" signature="9186:9363" ph="SELECT dirna... files" />
+            <marker date="1490458922000" expanded="true" signature="9537:9755" ph="select hashi... files" />
+            <marker date="1490458922000" expanded="true" signature="9615:9724" ph="select hashi... hashid" />
+            <marker date="1490458922000" expanded="true" signature="9638:9723" ph="select hashi... files" />
+            <marker date="1490458922000" expanded="true" signature="10333:10417" ph="select hashI... files" />
+            <marker date="1490458922000" expanded="true" signature="10333:10445" ph="select hashI... files" />
+            <marker date="1490458922000" expanded="true" signature="11030:11084" ph="select time,... " />
+            <marker date="1490458922000" expanded="true" signature="11128:11182" ph="select time,... " />
+            <marker date="1490458922000" expanded="true" signature="11241:11278" ph="select time " />
+            <marker date="1490458922000" expanded="true" signature="11320:11357" ph="select time " />
+            <marker date="1490458922000" expanded="true" signature="11628:11821" ph="select pathi... files" />
+            <marker date="1490458922000" expanded="true" signature="11781:11820" ph="select pathi... files" />
           </folding>
         </state>
       </provider>
@@ -517,58 +517,59 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/fchange.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="431">
-          <caret line="296" column="40" lean-forward="false" selection-start-line="296" selection-start-column="40" selection-end-line="296" selection-end-column="40" />
+        <state relative-caret-position="255">
+          <caret line="83" column="38" lean-forward="true" selection-start-line="83" selection-start-column="38" selection-end-line="83" selection-end-column="38" />
           <folding>
-            <marker date="1490457056000" expanded="true" signature="234:588" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="590:644" ph="CREATE INDEX... files_idx0" />
-            <marker date="1490457056000" expanded="true" signature="646:700" ph="CREATE INDEX... files_idx1" />
-            <marker date="1490457056000" expanded="true" signature="702:755" ph="CREATE INDEX... files_idx2" />
-            <marker date="1490457056000" expanded="true" signature="757:809" ph="CREATE INDEX... files_idx3" />
-            <marker date="1490457056000" expanded="true" signature="811:865" ph="CREATE INDEX... files_idx4" />
-            <marker date="1490457056000" expanded="true" signature="867:921" ph="CREATE INDEX... files_idx5" />
-            <marker date="1490457056000" expanded="true" signature="924:1041" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1043:1097" ph="CREATE INDEX... paths_idx1" />
-            <marker date="1490457056000" expanded="true" signature="1099:1156" ph="CREATE INDEX... paths_idx2" />
-            <marker date="1490457056000" expanded="true" signature="1158:1216" ph="CREATE INDEX... paths_idx3" />
-            <marker date="1490457056000" expanded="true" signature="1219:1315" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1317:1380" ph="CREATE INDEX... dirnames_idx1" />
-            <marker date="1490457056000" expanded="true" signature="1382:1443" ph="CREATE INDEX... dirnames_idx2" />
-            <marker date="1490457056000" expanded="true" signature="1446:1545" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1547:1613" ph="CREATE INDEX... filenames_idx1" />
-            <marker date="1490457056000" expanded="true" signature="1615:1679" ph="CREATE INDEX... filenames_idx2" />
-            <marker date="1490457056000" expanded="true" signature="1682:1770" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1772:1828" ph="CREATE INDEX... hashes_idx1" />
-            <marker date="1490457056000" expanded="true" signature="1830:1884" ph="CREATE INDEX... hashes_idx2" />
-            <marker date="1490457056000" expanded="true" signature="1887:1995" ph="CREATE TABLE... IF" />
-            <marker date="1490457056000" expanded="true" signature="1997:2051" ph="CREATE INDEX... scans_idx1" />
-            <marker date="1490457056000" expanded="true" signature="2053:2105" ph="CREATE INDEX... scans_idx2" />
-            <marker date="1490457056000" expanded="true" signature="3889:3927" ph="SELECT hashi... hashes" />
-            <marker date="1490457056000" expanded="true" signature="4112:4149" ph="SELECT scani... scans" />
-            <marker date="1490457056000" expanded="true" signature="4412:4458" ph="SELECT dirna... dirnames" />
-            <marker date="1490457056000" expanded="true" signature="4652:4701" ph="SELECT filen... filenames" />
-            <marker date="1490457056000" expanded="true" signature="4918:4977" ph="SELECT pathi... paths" />
-            <marker date="1490457056000" expanded="true" signature="5442:5512" ph="SELECT hashi... files" />
-            <marker date="1490457056000" expanded="true" signature="5774:5844" ph="INSERT into files... " />
-            <marker date="1490457056000" expanded="true" signature="6743:6785" ph="UPDATE scans... " />
-            <marker date="1490457056000" expanded="true" signature="7200:7358" ph="SELECT filei... files" />
-            <marker date="1490457056000" expanded="true" signature="7527:7556" ph="select scani... " />
-            <marker date="1490457056000" expanded="true" signature="7719:7958" ph="SELECT pathi... files" />
-            <marker date="1490457056000" expanded="true" signature="7918:7957" ph="select pathi... files" />
-            <marker date="1490457056000" expanded="true" signature="8923:9112" ph="select hashi... hashid" />
-            <marker date="1490457056000" expanded="true" signature="8970:9064" ph="select hashi... files" />
-            <marker date="1490457056000" expanded="true" signature="9208:9385" ph="SELECT dirna... files" />
-            <marker date="1490457056000" expanded="true" signature="9559:9777" ph="select hashi... files" />
-            <marker date="1490457056000" expanded="true" signature="9637:9746" ph="select hashi... hashid" />
-            <marker date="1490457056000" expanded="true" signature="9660:9745" ph="select hashi... files" />
-            <marker date="1490457056000" expanded="true" signature="10354:10438" ph="select hashI... files" />
-            <marker date="1490457056000" expanded="true" signature="10354:10466" ph="select hashI... files" />
-            <marker date="1490457056000" expanded="true" signature="11045:11099" ph="select time,... " />
-            <marker date="1490457056000" expanded="true" signature="11143:11197" ph="select time,... " />
-            <marker date="1490457056000" expanded="true" signature="11256:11293" ph="select time " />
-            <marker date="1490457056000" expanded="true" signature="11335:11372" ph="select time " />
-            <marker date="1490457056000" expanded="true" signature="11686:11879" ph="select pathi... files" />
-            <marker date="1490457056000" expanded="true" signature="11839:11878" ph="select pathi... files" />
+            <element signature="e#86#105#0" expanded="true" />
+            <marker date="1490458922000" expanded="true" signature="215:569" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="571:625" ph="CREATE INDEX... files_idx0" />
+            <marker date="1490458922000" expanded="true" signature="627:681" ph="CREATE INDEX... files_idx1" />
+            <marker date="1490458922000" expanded="true" signature="683:736" ph="CREATE INDEX... files_idx2" />
+            <marker date="1490458922000" expanded="true" signature="738:790" ph="CREATE INDEX... files_idx3" />
+            <marker date="1490458922000" expanded="true" signature="792:846" ph="CREATE INDEX... files_idx4" />
+            <marker date="1490458922000" expanded="true" signature="848:902" ph="CREATE INDEX... files_idx5" />
+            <marker date="1490458922000" expanded="true" signature="905:1022" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1024:1078" ph="CREATE INDEX... paths_idx1" />
+            <marker date="1490458922000" expanded="true" signature="1080:1137" ph="CREATE INDEX... paths_idx2" />
+            <marker date="1490458922000" expanded="true" signature="1139:1197" ph="CREATE INDEX... paths_idx3" />
+            <marker date="1490458922000" expanded="true" signature="1200:1296" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1298:1361" ph="CREATE INDEX... dirnames_idx1" />
+            <marker date="1490458922000" expanded="true" signature="1363:1424" ph="CREATE INDEX... dirnames_idx2" />
+            <marker date="1490458922000" expanded="true" signature="1427:1526" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1528:1594" ph="CREATE INDEX... filenames_idx1" />
+            <marker date="1490458922000" expanded="true" signature="1596:1660" ph="CREATE INDEX... filenames_idx2" />
+            <marker date="1490458922000" expanded="true" signature="1663:1751" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1753:1809" ph="CREATE INDEX... hashes_idx1" />
+            <marker date="1490458922000" expanded="true" signature="1811:1865" ph="CREATE INDEX... hashes_idx2" />
+            <marker date="1490458922000" expanded="true" signature="1868:1976" ph="CREATE TABLE... IF" />
+            <marker date="1490458922000" expanded="true" signature="1978:2032" ph="CREATE INDEX... scans_idx1" />
+            <marker date="1490458922000" expanded="true" signature="2034:2086" ph="CREATE INDEX... scans_idx2" />
+            <marker date="1490458922000" expanded="true" signature="3866:3904" ph="SELECT hashi... hashes" />
+            <marker date="1490458922000" expanded="true" signature="4089:4126" ph="SELECT scani... scans" />
+            <marker date="1490458922000" expanded="true" signature="4389:4435" ph="SELECT dirna... dirnames" />
+            <marker date="1490458922000" expanded="true" signature="4629:4678" ph="SELECT filen... filenames" />
+            <marker date="1490458922000" expanded="true" signature="4895:4954" ph="SELECT pathi... paths" />
+            <marker date="1490458922000" expanded="true" signature="5419:5489" ph="SELECT hashi... files" />
+            <marker date="1490458922000" expanded="true" signature="5751:5821" ph="INSERT into files... " />
+            <marker date="1490458922000" expanded="true" signature="6720:6762" ph="UPDATE scans... " />
+            <marker date="1490458922000" expanded="true" signature="7177:7335" ph="SELECT filei... files" />
+            <marker date="1490458922000" expanded="true" signature="7504:7533" ph="select scani... " />
+            <marker date="1490458922000" expanded="true" signature="7696:7935" ph="SELECT pathi... files" />
+            <marker date="1490458922000" expanded="true" signature="7895:7934" ph="select pathi... files" />
+            <marker date="1490458922000" expanded="true" signature="8901:9090" ph="select hashi... hashid" />
+            <marker date="1490458922000" expanded="true" signature="8948:9042" ph="select hashi... files" />
+            <marker date="1490458922000" expanded="true" signature="9186:9363" ph="SELECT dirna... files" />
+            <marker date="1490458922000" expanded="true" signature="9537:9755" ph="select hashi... files" />
+            <marker date="1490458922000" expanded="true" signature="9615:9724" ph="select hashi... hashid" />
+            <marker date="1490458922000" expanded="true" signature="9638:9723" ph="select hashi... files" />
+            <marker date="1490458922000" expanded="true" signature="10333:10417" ph="select hashI... files" />
+            <marker date="1490458922000" expanded="true" signature="10333:10445" ph="select hashI... files" />
+            <marker date="1490458922000" expanded="true" signature="11030:11084" ph="select time,... " />
+            <marker date="1490458922000" expanded="true" signature="11128:11182" ph="select time,... " />
+            <marker date="1490458922000" expanded="true" signature="11241:11278" ph="select time " />
+            <marker date="1490458922000" expanded="true" signature="11320:11357" ph="select time " />
+            <marker date="1490458922000" expanded="true" signature="11628:11821" ph="select pathi... files" />
+            <marker date="1490458922000" expanded="true" signature="11781:11820" ph="select pathi... files" />
           </folding>
         </state>
       </provider>

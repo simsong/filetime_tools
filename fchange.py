@@ -5,8 +5,7 @@
 
 __version__ = '0.0.1'
 import os.path, sys
-
-import os, sys, re, collections, sqlite3
+import os, re, sqlite3
 import datetime
 
 CACHE_SIZE = 2000000
@@ -107,7 +106,7 @@ class File:
         self.dirname = dirname
         self.filenameid = filenameid
         self.filename = filename
-        self.size     = size
+        self.size = size
 
 
 ############################################################
@@ -222,14 +221,13 @@ def new_files(conn, scan0, scan1):
     c = conn.cursor()
     c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename "
               "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-              "where scanid=? and pathid not in (select pathid from files where scanid=?)", (scan1, scan0))
+              "WHERE scanid=? AND pathid NOT IN (SELECT pathid FROM files WHERE scanid=?)", (scan1, scan0))
     return (File(pathid=f[0], dirnameid=f[1], dirname=f[2], filenameid=f[3], filename=f[4]) for f in c)
 
 
 def deleted_files(conn, scan0, scan1):
     """Files in scan scan1 that are not in scan0"""
     return new_files(conn, scan1, scan0)
-
 
 def changed_files(conn, scan0, scan1):
     """Files that were changed between scan0 and scan1"""
@@ -241,14 +239,15 @@ def changed_files(conn, scan0, scan1):
               (scan0, scan1))
     return (File(pathid=f[0]) for f in c)
 
+
 def duplicate_files(conn, scan0):
     """Return a generator for the duplicate files at scan0.
     Returns a list of a list of File objects, sorted by size"""
     c = conn.cursor()
     d = conn.cursor()
-    c.execute('select hashid, ct, size from '
-              '(select hashid, count(*) as ct, size from files '
-              'where scanid=? group by hashid) natural join hashes where ct>1 order by 3 desc;', (scan0,))
+    c.execute('SELECT hashid, ct, size FROM '
+              '(SELECT hashid, count(*) AS ct, size FROM files '
+              'WHERE scanid=? GROUP BY hashid) NATURAL JOIN hashes WHERE ct>1 ORDER BY 3 DESC;', (scan0,))
     for (hashid, ct, size) in c:
         ret = []
         d.execute(
@@ -260,12 +259,12 @@ def duplicate_files(conn, scan0):
 
 # This is what I am trying to accomplish:
 """
-select hashid,pathid,count(*) as ctb from files where
-scanid=2 and hashid in
-(select hashid from
-   (select hashid, count(*) as cta from files where scanid=1 group by hashid having cta=1)
+SELECT hashid,pathid,count(*) AS ctb FROM files WHERE
+scanid=2 AND hashid IN
+(SELECT hashid FROM
+   (SELECT hashid, count(*) AS cta FROM files WHERE scanid=1 GROUP BY hashid HAVING cta=1)
 )
-group by hashid having ctb=1;
+GROUP BY hashid HAVING ctb=1;
 """
 
 """
@@ -280,24 +279,23 @@ def renamed_files(conn, scan1, scan2):
     """Return a generator for the duplicate files at scan0.
     Returns a list of a list of File objects that were renamed from scan0 to scan1"""
 
-    def get_singletons(conn,scanid):
+    def get_singletons(conn, scanid):
         c = conn.cursor()
-        c.execute('select hashID, pathid, count(*) as ct '
-                  'from files where scanid=? GROUP BY hashid HAVING ct=1',(scanid,))
+        c.execute('SELECT hashID, pathid, count(*) AS ct '
+                  'FROM files WHERE scanid=? GROUP BY hashid HAVING ct=1', (scanid,))
         return c
 
     pairs_in_scan1 = set()
     path1_for_hash = {}
-    for (hashID, path1, count) in get_singletons(conn,scan1):
-        pairs_in_scan1.add((hashID,path1))
+    for (hashID, path1, count) in get_singletons(conn, scan1):
+        pairs_in_scan1.add((hashID, path1))
         path1_for_hash[hashID] = path1
 
     ret = []
     for (hashID, path2, count) in get_singletons(conn, scan2):
-        if hashID in path1_for_hash and (hashID,path2) not in pairs_in_scan1:
-            ret.append((hashID,path1_for_hash[hashID],path2))
+        if hashID in path1_for_hash and (hashID, path2) not in pairs_in_scan1:
+            ret.append((hashID, path1_for_hash[hashID], path2))
     return ret
-
 
 def changed(conn, fname):
     """Generate a database object of what's changed."""
@@ -310,9 +308,6 @@ def report(conn, a, b):
     btime = execselect(conn, "SELECT time FROM scans WHERE scanid=?", (b,))[0]
     print("Report from {}->{}".format(atime, btime))
 
-    renamed_files(conn, a, b)
-    exit(0)
-
     print("\n")
     print("New files:")
     for f in new_files(conn, a, b):
@@ -320,12 +315,8 @@ def report(conn, a, b):
 
     print("\n")
     print("Deleted files:")
-    c = conn.cursor()
-    c.execute(
-        "SELECT pathid, dirname, filename FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-        "WHERE scanid=1 AND pathid NOT IN (SELECT pathid FROM files WHERE scanid=2)")
-    for (pathid, dirname, filename) in c:
-        print(dirname + filename)
+    for f in deleted_files(conn, a, b):
+        print(f.dirname + f.filename)
 
     print("\n")
     print("Changed files:")
@@ -333,6 +324,8 @@ def report(conn, a, b):
         print(get_pathname(conn, pathid))
 
     print("Renamed files:")
+    for line in renamed_files(conn, int(m.group(1)), int(m.group(2))):
+        print(line)
     print("Duplicate files:")
 
     # for (dirname, filename) in d:
@@ -357,7 +350,7 @@ if (__name__ == "__main__"):
     parser.add_argument("--db", help="Specify database location", default="data.sqlite3")
     parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
-    parser.add_argument("--jchanged", help="Create 'what's changed?' json database object")
+    parser.add_argument("--jreport", help="Create 'what's changed?' json report")
     parser.add_argument("--dups", help="Report duplicates for a scan")
 
     args = parser.parse_args()
@@ -384,15 +377,13 @@ if (__name__ == "__main__"):
         if not m:
             print("Usage: --report N-M")
             exit(1)
-        for line in renamed_files(conn,int(m.group(1)), int(m.group(2))):
-            print(line)
         report(conn, int(m.group(1)), int(m.group(2)))
+
+    if args.jreport:
+        jreport(conn)
 
     if args.dups:
         report_dups(conn, int(args.dups))
-
-    if args.jchanged:
-        changed(conn, args.changed)
 
     if args.roots:
         s = Scanner(conn)
