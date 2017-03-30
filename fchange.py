@@ -216,7 +216,15 @@ def scans(conn):
         print(scanid, time)
 
 
-def new_files(conn, scan0, scan1):
+def get_all_files(conn, scan1):
+    """Files in scan scan1"""
+    c = conn.cursor()
+    c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename, fileid "
+              "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+              "WHERE scanid=?", (scan1,))
+    return (File(pathid=f[0], dirnameid=f[1], dirname=f[2], filenameid=f[3], filename=f[4], fileid=f[5]) for f in c)
+
+def get_new_files(conn, scan0, scan1):
     """Files in scan scan1 that are not in scan scan0"""
     c = conn.cursor()
     c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename "
@@ -227,7 +235,7 @@ def new_files(conn, scan0, scan1):
 
 def deleted_files(conn, scan0, scan1):
     """Files in scan scan1 that are not in scan0"""
-    return new_files(conn, scan1, scan0)
+    return get_new_files(conn, scan1, scan0)
 
 def changed_files(conn, scan0, scan1):
     """Files that were changed between scan0 and scan1"""
@@ -277,7 +285,8 @@ Better approach:
 
 def renamed_files(conn, scan1, scan2):
     """Return a generator for the duplicate files at scan0.
-    Returns a list of a list of File objects that were renamed from scan0 to scan1"""
+    The generator returns pairs of (F_old,F_new)
+    """
 
     def get_singletons(conn, scanid):
         c = conn.cursor()
@@ -291,11 +300,9 @@ def renamed_files(conn, scan1, scan2):
         pairs_in_scan1.add((hashID, path1))
         path1_for_hash[hashID] = path1
 
-    ret = []
     for (hashID, path2, count) in get_singletons(conn, scan2):
         if hashID in path1_for_hash and (hashID, path2) not in pairs_in_scan1:
-            ret.append((hashID, path1_for_hash[hashID], path2))
-    return ret
+            yield (File(hashid=hashID,pathid=path1_for_hash[hashID]), File(hashid=hashID,pathid=path2))
 
 def changed(conn, fname):
     """Generate a database object of what's changed."""
@@ -310,12 +317,7 @@ def report(conn, a, b):
 
     print("\n")
     print("New files:")
-    for f in new_files(conn, a, b):
-        print(f.dirname + f.filename)
-
-    print("\n")
-    print("Deleted files:")
-    for f in deleted_files(conn, a, b):
+    for f in get_new_files(conn, a, b):
         print(f.dirname + f.filename)
 
     print("\n")
@@ -323,21 +325,38 @@ def report(conn, a, b):
     for f in changed_files(conn, a, b):
         print(get_pathname(conn, pathid))
 
+    print("\n")
+    print("Deleted files:")
+    for f in deleted_files(conn, a, b):
+        print(f.dirname + f.filename)
+
     print("Renamed files:")
-    for line in renamed_files(conn, int(m.group(1)), int(m.group(2))):
-        print(line)
+    for pair in renamed_files(conn, a, b):
+        print(pair[0],pair[1])
+
     print("Duplicate files:")
-
-    # for (dirname, filename) in d:
-
-
-def report_dups(conn, scan0):
     for dups in duplicate_files(conn, scan0):
         print("Filesize: {:,}  Count: {}".format(dups[0].size, len(dups)))
         for dup in dups:
             print("    " + dup.dirname + "/" + dup.filename)
     print("\n-----------")
 
+
+def jreport(conn):
+    dirnameids = {}
+    filenameids = {}
+    fileids = {}                 # map of fileids.
+    all_files = {}              # fileids of all allocated files, by filename
+    for f in get_all_files(1):
+        all_files[f.filename] = f.fileid
+        fileids[f.fileid] = (f.dirnameid,f.filenameid,f.size,f.mtime)
+        dirnameids[f.dirnameid] = f.dirname
+        filenameids[f.filenameid] = f.filename
+
+    print("var dirnameids = {};".format(json.dumps(dirnameids)))
+    print("var filenameids = {};".format(json.dumps(filenameids)))
+    print("var fileids = {};".format(json.dumps(fileids)))
+    print("var all_files = {};".format(json.dumps(all_files)))
 
 if (__name__ == "__main__"):
     import argparse
