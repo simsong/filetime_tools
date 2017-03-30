@@ -4,9 +4,7 @@
 # File change detector
 
 __version__ = '0.0.1'
-import os.path, sys
-import os, re, sqlite3
-import datetime
+import os.path, sys, json, os, re, sqlite3, datetime
 
 CACHE_SIZE = 2000000
 
@@ -98,10 +96,15 @@ def hash_file(path):
 # Methods that return File(pathid,dirname,filename) for searches
 #
 class File:
-    __slots__ = ['pathid', 'dirnameid', 'dirname', 'filenameid', 'filename', 'size']
+    __slots__ = ['fileid', 'mtime', 'pathid', 'dirnameid', 'dirname', 'filenameid', 'filename', 'size']
     def __init__(self, row):
-        for name in __slots__:
-            setattr(self,name,row[name] if name in row else None)
+        for name in self.__slots__:
+            try:
+                setattr(self,name,row[name])
+            except IndexError:
+                setattr(self,name,None)
+    def __repr__(self):
+        return "File<" + ",".join(["{}:{}".format(name,getattr(self,name)) for name in self.__slots__]) + ">"
 
 ############################################################
 class Scanner(object):
@@ -311,6 +314,7 @@ def report(conn, a, b):
     print("\n")
     print("New files:")
     for f in get_new_files(conn, a, b):
+        print("f=",f)
         print(f.dirname + f.filename)
 
     print("\n")
@@ -340,16 +344,16 @@ def jreport(conn):
     filenameids = {}
     fileids = {}                 # map of fileids.
     all_files = {}              # fileids of all allocated files, by filename
-    for f in get_all_files(1):
+    for f in get_all_files(conn,1):
         all_files[f.filename] = f.fileid
         fileids[f.fileid] = (f.dirnameid,f.filenameid,f.size,f.mtime)
         dirnameids[f.dirnameid] = f.dirname
         filenameids[f.filenameid] = f.filename
 
-    print("var dirnameids = {};".format(json.dumps(dirnameids)))
-    print("var filenameids = {};".format(json.dumps(filenameids)))
-    print("var fileids = {};".format(json.dumps(fileids)))
-    print("var all_files = {};".format(json.dumps(all_files)))
+    print("var dirnameids = {};".format(json.dumps(dirnameids,sort_keys=True)))
+    print("var filenameids = {};".format(json.dumps(filenameids,sort_keys=True)))
+    print("var fileids = {};".format(json.dumps(fileids,sort_keys=True)))
+    print("var all_files = {};".format(json.dumps(all_files,sort_keys=True)))
 
 if (__name__ == "__main__"):
     import argparse
