@@ -99,15 +99,9 @@ def hash_file(path):
 #
 class File:
     __slots__ = ['pathid', 'dirnameid', 'dirname', 'filenameid', 'filename', 'size']
-
-    def __init__(self, pathid=None, dirnameid=None, dirname=None, filenameid=None, filename=None, size=None):
-        self.pathid = pathid
-        self.dirnameid = dirnameid
-        self.dirname = dirname
-        self.filenameid = filenameid
-        self.filename = filename
-        self.size = size
-
+    def __init__(self, row):
+        for name in __slots__:
+            setattr(self,name,row[name] if name in row else None)
 
 ############################################################
 class Scanner(object):
@@ -222,7 +216,7 @@ def get_all_files(conn, scan1):
     c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename, fileid "
               "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
               "WHERE scanid=?", (scan1,))
-    return (File(pathid=f[0], dirnameid=f[1], dirname=f[2], filenameid=f[3], filename=f[4], fileid=f[5]) for f in c)
+    return (File(f) for f in c)
 
 def get_new_files(conn, scan0, scan1):
     """Files in scan scan1 that are not in scan scan0"""
@@ -230,7 +224,7 @@ def get_new_files(conn, scan0, scan1):
     c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename "
               "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
               "WHERE scanid=? AND pathid NOT IN (SELECT pathid FROM files WHERE scanid=?)", (scan1, scan0))
-    return (File(pathid=f[0], dirnameid=f[1], dirname=f[2], filenameid=f[3], filename=f[4]) for f in c)
+    return (File(f) for f in c)
 
 
 def deleted_files(conn, scan0, scan1):
@@ -245,7 +239,7 @@ def changed_files(conn, scan0, scan1):
               "JOIN (SELECT pathid, hashid, scanid FROM FILES WHERE scanid=?) as 'b' " +
               "ON a.pathid=b.pathid WHERE a.hashid != b.hashid",
               (scan0, scan1))
-    return (File(pathid=f[0]) for f in c)
+    return (File(f) for f in c)
 
 
 def duplicate_files(conn, scan0):
@@ -259,10 +253,10 @@ def duplicate_files(conn, scan0):
     for (hashid, ct, size) in c:
         ret = []
         d.execute(
-            "SELECT dirnameid,dirname,filenameid,filename "
+            "SELECT size,dirnameid,dirname,filenameid,filename "
             "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
             "WHERE scanid=? AND hashid=?", (scan0, hashid,))
-        yield [File(size=size, dirnameid=f[0], dirname=f[1], filenameid=f[2], filename=f[3]) for f in d]
+        yield [File(f) for f in d]
 
 
 # This is what I am trying to accomplish:
@@ -281,7 +275,6 @@ Better approach:
 * Get a list of all the (hashid, pathid2) pairs from scan2 that have only a single pathid for the scan.
 * remove from (hashid, pathid2) all that are in (hashid, pathid1)
  """
-
 
 def renamed_files(conn, scan1, scan2):
     """Return a generator for the duplicate files at scan0.
@@ -389,6 +382,7 @@ if (__name__ == "__main__"):
 
     # give me a big cache
     conn = sqlite3.connect(args.db)
+    conn.row_factory = sqlite3.Row
     conn.cursor().execute("PRAGMA cache_size = {};".format(CACHE_SIZE))
 
     if args.report:
