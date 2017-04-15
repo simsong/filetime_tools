@@ -3,3 +3,4 @@ jquery*.js
 words.json
 *.bak
 *~
+.DS_Store
