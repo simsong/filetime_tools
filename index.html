@@ -1,51 +1,57 @@
 <html>
-  <head>
-   <script type="text/javascript" src="jquery.js"></script>
-   <script type="text/javascript" language="javascript" src="words.json"></script>
-   <script type='text/javascript'>
-      function Search() {
-          console.log("Searching...\n")
-          var count = 0;
-          var term = $("#keyword").val();
-          var result = $("#result");
-          if (term == "") {
-              result.text("Specify something to search!");
-              return;
-          }
-          result.html("<p>Searching for " + term + "...</p>");
-          var res = ""
-          numbered_words.forEach(function (word) {
-              if (word[1].includes(term)) {
-                  res += word + " includes " + term + "<br/>";
-                  count += 1;
-              }
-          });
-          if (count < 300) {
-          res = "<p>Words found: " + count + "<br/>" + res + "</p>";
-          } else {
-              res = "<p>Words found: " + count + " </p>";
-          }
-          result.html(res);
-      }
+<head>
+    <script type="text/javascript">
+        var all_files = {};           // To make the syntax checker happy
+    </script>
+    <script type="text/javascript" src="jquery.js"></script>
+    <script type="text/javascript" src="out.json"></script>
+    <script type='text/javascript'>
+        function Search() {
+            var searchTerm = $("#keyword").val();
+            var count = 0;
+            var result = $("#allFiles");
+            var res = "<tr><th>File Name</th><th>Size</th><th>Modified</th></tr>";
+            var lowerTerm = searchTerm.toLowerCase();
+            for (var fileName in all_files) {
+                if (fileName.toLowerCase().includes(lowerTerm)){
+                    res += "<tr><td>" + fileName + "</td><td>size</td><td>modified</td></tr>\n";
+                    count += 1;
+                }
+                if (count > 300) {
+                    res += "<tr><td>...</td><td>...</td><td>...</td></tr>\n";
+
+                }
+            }
+            result.html(res);
+        }
+
+        $(document).ready(function() {
+            var ready = $("#ready");
+            ready.text("ready to search...");
+            $("#keyword").keyup(function () {
+                Search();
+            });
+        });
     </script>
 
-   <script type="text/javascript">
-       $(document).ready(function(e) {
-           $("#ready").text("ready to search "+numbered_words.length + " words");
-           $("#keyword").keyup(function () {
-              Search();
-           });
-       });
-   </script>
+
+</head>
+<body>
+<form name="search" title="input form">
+    <input type="text" name="keyword" id="keyword" />
+</form>
+<button onclick="Search()">Search Already!</button>
+<div id="ready">...</div>
+<h2>New Files</h2>
+<h2>Changed Files</h2>
+<h2>Deleted Files</h2>
+<h2>Renamed Files</h2>
+<h2>All Files</h2>
+<table id="allFiles">
+</table>
+<div id="result">    This result goes here.
 
 
-  </head>
-  <body>
-    <form name="search" >
-      <input type="text" name="keyword" id="keyword" />
-    </form>
-    <button onclick="Search()">Search Already!</button>
-  <div id="ready">...</div>
-  <div id="result">    This result goes here.  </div>
-  </body>
+</div>
+</body>
 </html>
