@@ -143,6 +143,7 @@ class Scanner(object):
         """ Add the file to the database database.
         If it is there and the mtime hasn't been changed, don't re-hash."""
 
+        if args.verbose: print("{} ...".format(path),end="")
         try:
             st = os.stat(path)
         except FileNotFoundError as e:
@@ -164,13 +165,13 @@ class Scanner(object):
             pass
         except OSError as e:
             pass
+        if args.verbose: print("")
 
     def ingest(self, root):
         import time
 
         self.c = self.conn.cursor()
         self.c.execute("BEGIN TRANSACTION")
-
         scanid = self.get_scanid(iso_now())
 
         count = 0
@@ -339,6 +340,19 @@ def report(conn, a, b):
     print("\n-----------")
 
 
+def report_dups(conn,scan0):
+    import codecs
+    with codecs.open(args.out,mode="w",encoding='utf-8') as out:
+        out.write("Duplicate files:\n")
+        total_wasted = 0
+        for dups in duplicate_files(conn, scan0):
+            out.write("Filesize: {:,}  Count: {}\n".format(dups[0].size, len(dups)))
+            for dup in dups:
+                out.write("   , " + os.path.join(dup.dirname,dup.filename) + "\n")
+            total_wasted += dups[0].size * (len(dups)-1)
+        out.write("-----------\n")
+        out.write("Total wasted space: {}MB".format(total_wasted/1000000))
+
 def jreport(conn):
     dirnameids = {}
     filenameids = {}
@@ -368,6 +382,8 @@ if (__name__ == "__main__"):
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--jreport", help="Create 'what's changed?' json report")
     parser.add_argument("--dups", help="Report duplicates for a scan")
+    parser.add_argument("--out",  help="Specify output file", default="output.csv")
+    parser.add_argument("--verbose", action="store_true")
 
     args = parser.parse_args()
 
