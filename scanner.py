@@ -1,31 +1,45 @@
+### scanner.py
+###
+### part of the file system change
+
 ############################################################
 ############################################################
 
+
+import os
+import sys
+import zipfile
 import time
 
-def hash_file(mypath):
-    """High performance file hasher. Hash a file and return the hexdigest."""
+COMMIT_RATE = 10  # commit every 10 directories
+
+def hash_file(f):
+    """High performance file hasher. Hash a file and return the MD5 hexdigest."""
     from hashlib import md5
     m = md5()
-    with open(mypath, "rb") as f:
-        while True:
-            buf = f.read(65535)
-            if not buf:
-                break
-            m.update(buf)
-    return m.hexdigest()
+    while True:
+        buf = f.read(65535)
+        if not buf:
+            return m.hexdigest()
+        m.update(buf)
 
-def is_zipfile(path):
-    """Check to see if path is a zipfile."""
-    return False
+def open_zipfile(path):
+    """Check to see if path is a zipfile.
+    If so, return an open zipfile"""
+    if path.lower().endswith(".jar"):           # Don't peek inside jar files
+        return None
+    try:
+        return zipfile.ZipFile(path,mode="r")
+    except zipfile.BadZipfile:
+        return None
+    except zipfile.LargeZipFile:
+        return None
 
 class Scanner(object):
     """Class to scan a directory and store the results in the database."""
     def __init__(self, conn):
         self.conn = conn
         self.c = self.conn.cursor()
-
-
 
     def get_hashid(self, hash):
         self.c.execute("INSERT or IGNORE INTO hashes (hash) VALUES (?);", (hash,))
@@ -56,8 +70,31 @@ class Scanner(object):
                        (dirnameid, filenameid,))
         return self.c.fetchone()[0]
 
-    def process_zipfile(self, scanid, path):
-        """Scan a zip file and insert it into the database"""
+    def insert_file(self, path, mtime, file_size, handle, scanid):
+        """@mtime in time_t"""
+        pathid = self.get_pathid(path)
+
+        # See if this file with this length is in the database.
+        # If not, we will hash the file and enter it.
+        # This means that we are trusting that the mtime gets updated if the file contents change.
+        # We might also want to look at the file generation count.
+        self.c.execute("SELECT hashid FROM files WHERE pathid=? AND mtime=? AND size=? LIMIT 1",
+                       (pathid, mtime, file_size))
+        row = self.c.fetchone()
+        try:
+            if row:
+                (hashid,) = row
+            else:
+                hashid = self.get_hashid(hash_file(handle))
+            self.c.execute("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (?,?,?,?,?)",
+                           (pathid, mtime, st_size, hashid, scanid))
+            if args.vfiles:
+                print("{} {}".format(path, file_size))
+        except PermissionError as e:
+            pass
+        except OSError as e:
+            pass
+
 
     def process_filepath(self, scanid, path):
         """ Add the file to the database database.
@@ -67,30 +104,14 @@ class Scanner(object):
             st = os.stat(path)
         except FileNotFoundError as e:
             return
-        pathid = self.get_pathid(path)
 
-        # See if this file with this length is in the database.
-        # If not, we will hash the file and enter it.
-        # This means that we are trusting that the mtime gets updated if the file contents change.
-        # We might also want to look at the file generation count.
-        self.c.execute("SELECT hashid FROM files WHERE pathid=? AND mtime=? AND size=? LIMIT 1",
-                       (pathid, st.st_mtime, st.st_size))
-        row = self.c.fetchone()
-        try:
-            if row:
-                (hashid,) = row
-            else:
-                hashid = self.get_hashid(hash_file(path))
-            self.c.execute("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (?,?,?,?,?)",
-                           (pathid, st.st_mtime, st.st_size, hashid, scanid))
-            if args.vfiles:
-                print("{} {}".format(path,st.st_size))
-            if is_zipfile(path):
-                self.process_zipfile(scanid,path)
-        except PermissionError as e:
-            pass
-        except OSError as e:
-            pass
+        self.insert_file(path,st.mtime,st.size,open(path,"rb"),scanid)
+
+    def process_zipfile(self, scanid, path, zf):
+        """Scan a zip file and insert it into the database"""
+        for name in zf.namelist():
+            zi = zf.getinfo(name)
+            self.insert_file(path+"/"+zi.filename, zi.date_time, zi.file_size,zf.open("name","r"), scanid)
 
     def ingest(self, root):
         """Ingest everything from the root"""
@@ -108,6 +129,10 @@ class Scanner(object):
                 print("{}".format(dirpath), end='\n' if args.vfiles else '')
             for filename in filenames:
                 self.process_filepath(scanid, os.path.join(dirpath, filename))
+                zf = open_zipfile(path)
+                if zf:
+                    self.process_zipfile(scanid,path, zf)
+
             if args.vdirs:
                 print("\r{}:  {}".format(dirpath,len(filenames)))
             count += len(filenames)

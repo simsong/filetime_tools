@@ -4,3 +4,6 @@ words.json
 *.bak
 *~
 .DS_Store
+out.json
+.cache
+__pycache__
