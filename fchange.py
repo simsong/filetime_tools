@@ -12,11 +12,19 @@ import re
 import sqlite3
 import sys
 
+<<<<<<< HEAD
 from file import File
 from scanner import Scanner
 
 CACHE_SIZE = 2000000
 SQL_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE))
+=======
+from dbfile import DBFile, SLGSQL
+from scanner import Scanner
+
+CACHE_SIZE = 2000000
+SQL_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
+>>>>>>> 566eb2118e88ba7fc9775be53d525366c6d570a6
 
 # Replace this with an ORM?
 SQL_SCHEMA = \
@@ -59,11 +67,12 @@ CREATE INDEX IF NOT EXISTS scans_idx1 ON scans(scanid);
 CREATE INDEX IF NOT EXISTS scans_idx2 ON scans(time);
 """
 
-"""Explaination of tables:
+"""Explanation of tables:
 files         - list of all files
 hashes       - table of all hash code
 """
 
+<<<<<<< HEAD
 COMMIT_RATE = 10  # commit every 10 directories
 
 class SLGSQL:
@@ -83,6 +92,8 @@ class SLGSQL:
         c.execute(sql, vals)
         return c.fetchone()
 
+=======
+>>>>>>> 566eb2118e88ba7fc9775be53d525366c6d570a6
 
 #################### END SQL PACKAGE ####################
 #########################################################
@@ -97,6 +108,10 @@ def scans(conn):
     c = conn.cursor()
     for (scanid, time) in c.execute("SELECT scanid,time FROM scans"):
         print(scanid, time)
+
+def last_scan(conn):
+    return SLGSQL.execselect(conn, "SELECT MAX(scanid) FROM scans", ())[0]
+
 
 def last_scan(conn):
     return SLGSQL.execselect(conn, "SELECT MAX(scanid) FROM scans", ())[0]
@@ -202,6 +217,7 @@ def report(conn, a, b):
 
     print("Duplicate files:")
     for dups in get_duplicate_files(conn, b):
+<<<<<<< HEAD
         print("Filesize: {:,}  Count: {}".format(dups[0].size, len(dups)))
         for dup in dups:
             print("    {}".format(dup.get_path(conn)))
@@ -232,6 +248,26 @@ def report_dups(conn,scan0):
             total_wasted += dups[0].size * (len(dups)-1)
         out.write("-----------\n")
         out.write("Total wasted space: {}MB".format(total_wasted/1000000))
+=======
+        print("Filesize: {:,}  Count: {}".format(dups[0].size, len(dups)))
+        for dup in dups:
+            print("    {}".format(dup.get_path(conn)))
+    print("\n-----------")
+
+
+def report_dups(conn, b):
+    duplicate_bytes = 0
+    for dups in get_duplicate_files(conn, b):
+        if dups[0].size > args.dupsize:
+            print("Filesize: {:,}  Count: {}".format(dups[0].size, len(dups)))
+            for dup in dups:
+                print("    {}".format(dup.get_path(conn)))
+            print()
+            duplicate_bytes += dups[0].size * (len(dups) - 1)
+    print("\n-----------")
+    print("Total space duplicated by files larger than {:,}: {:,}".format(args.dupsize, duplicate_bytes))
+
+>>>>>>> 566eb2118e88ba7fc9775be53d525366c6d570a6
 
 def jreport(conn):
     from collections import defaultdict
@@ -295,11 +331,31 @@ def jreport(conn):
         dump_dictionary(fp, "fileids", fileids)
 
 
+<<<<<<< HEAD
 if (__name__ == "__main__"):
+=======
+def get_root(conn):
+    return SLGSQL.execselect(conn, "SELECT value FROM metadata WHERE key='root'")[0]
+
+
+def create_database(name, root):
+    if os.path.exists(name):
+        print("file exists: {}".format(name))
+        exit(1)
+    conn = sqlite3.connect(name)
+    SLGSQL.create_schema(SQL_SCHEMA, conn)
+    conn.cursor().execute("INSERT INTO metadata (key, value) VALUES (?,?)", ("root", root))
+    conn.commit()
+    conn.close()
+
+
+if __name__ == "__main__":
+>>>>>>> 566eb2118e88ba7fc9775be53d525366c6d570a6
     import argparse
 
     parser = argparse.ArgumentParser(description='Compute file changes',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+<<<<<<< HEAD
     parser.add_argument('roots', type=str, nargs='*', help='Directories to process')
     parser.add_argument("--create", help="Create database", action="store_true")
     parser.add_argument("--upgrade", help="Upgrade the database, then exit", action='store_true')
@@ -308,10 +364,18 @@ if (__name__ == "__main__"):
     parser.add_argument("--roots", help="List the roots in the DB", action='store_true')
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--verbose", action="store_true")
+=======
+    parser.add_argument("--create", help="Create a database for a given ROOT")
+    parser.add_argument("--db", help="Specify database location", default="data.sqlite3")
+    parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
+    parser.add_argument("--root", help="List the root in the DB", action='store_true')
+    parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
+>>>>>>> 566eb2118e88ba7fc9775be53d525366c6d570a6
     parser.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
     parser.add_argument("--dups", help="Report duplicates for most recent scan", action='store_true')
     parser.add_argument("--dupsize", help="Don't report dups smaller than dupsize", default=1024 * 1024, type=int)
     parser.add_argument("--out", help="Specifies output filename")
+<<<<<<< HEAD
     parser.add_argument("--vfiles", help="Report each file as ingested",action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested",action="store_true")
 
@@ -327,15 +391,33 @@ if (__name__ == "__main__"):
         SLGSQL.create_schema(SQL_SCHEMA,conn)
         print("Created" if args.create else "Upgraded.")
         exit(0)
+=======
+    parser.add_argument("--vfiles", help="Report each file as ingested", action="store_true")
+    parser.add_argument("--vdirs", help="Report each dir as ingested", action="store_true")
+
+    args = parser.parse_args()
+
+    if args.create:
+        create_database(args.db, args.create)
+        print("Created {}  root: {}".format(args.db, args.create))
+>>>>>>> 566eb2118e88ba7fc9775be53d525366c6d570a6
 
     if args.scans:
         scans(sqlite3.connect(args.db))
         exit(0)
 
-    # give me a big cache
+    # open database and give me a big cache
     conn = sqlite3.connect(args.db)
     conn.row_factory = sqlite3.Row
     conn.cursor().execute(SQL_SET_CACHE)
+<<<<<<< HEAD
+=======
+
+    if args.root:
+        c = conn.cursor()
+        print("Root: {}".format(get_root(conn)))
+        exit(0)
+>>>>>>> 566eb2118e88ba7fc9775be53d525366c6d570a6
 
     if args.report:
         m = re.search("(\d+)-(\d+)", args.report)
@@ -350,8 +432,6 @@ if (__name__ == "__main__"):
     if args.dups:
         report_dups(conn, last_scan(conn))
 
-    if args.roots:
-        s = Scanner(conn)
-        for root in args.roots:
-            print(root)
-            s.ingest(root)
+    root = get_root(conn)
+    print("Scanning: {}".format(root))
+    Scanner(conn).ingest(root)
