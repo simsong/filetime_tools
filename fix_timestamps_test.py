@@ -11,6 +11,7 @@ def test_newname():
             ["name.1.2.89.jpg","name.1989-01-02.jpg"],
             ["photo-04022014.bmp","photo-2014-04-02.bmp"],
             ["photo-04.02.2014.jpeg","photo-2014-04-02.jpeg"],
+            ["Supplies3.8.13.doc","Supplies2013-05-30.doc"]
             ]
     for (old,new) in pats:
         assert newname(old)==new
@@ -42,3 +43,7 @@ def test_valid_year():
 
 def test_newname():
     assert newname("SE/JetsamEvent-2017-03-31-063700.ips") == None
+
+if __name__=="__main__":
+    test_newname()
+    print("done")

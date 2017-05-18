@@ -92,10 +92,10 @@ def newname(fname):
             if not valid_month(new_month): return None
             if not valid_day(new_day): return None
 
-            basename_new = basename.replace(month,"MONTH").replace(day,"DAY").replace(year,"YEAR")
+            basename_new = basename.replace(month,"MONTH",1).replace(day,"DAY",1).replace(year,"YEAR",1)
             basename_new = basename_new.replace("MONTHDAYYEAR","MONTH-DAY-YEAR")
             basename_new = basename_new.replace("MONTH.DAY.YEAR","MONTH-DAY-YEAR")
-            basename_new = basename_new.replace("MONTH",new_year).replace("DAY",new_month).replace("YEAR",new_day)
+            basename_new = basename_new.replace("MONTH",new_year,1).replace("DAY",new_month,1).replace("YEAR",new_day,1)
             return os.path.join(dirname,basename_new)
     return None
         
@@ -107,7 +107,9 @@ def interactive_fix_name(fname):
         getch = readchar.readchar
     if sys.platform=='win32':
         import msvcrt
-        getch = msvcrt.getch
+        def wingetch():
+            return msvcrt.getch().decode('utf-8')
+        getch = wingetch
     fname_new = newname(fname)
     if fname_new:
         print("{} ==> {} ".format(fname,os.path.basename(fname_new)),end="")
