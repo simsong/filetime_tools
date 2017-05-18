@@ -18,8 +18,6 @@ class VerifyDialog(QDialog):
             item.setCheckState(Qt.Checked) 
             self.listWidget.addItem(item)
 
-        #self.listWidget.show()
-
         #self.pagesWidget = QStackedWidget()
         #self.pagesWidget.addWidget(ConfigurationPage())
         #self.pagesWidget.addWidget(UpdatePage())
@@ -33,7 +31,7 @@ class VerifyDialog(QDialog):
         runButton.clicked.connect(self.exec)
 
         cancelButton = QPushButton("Cancel")
-        cancelButton.clicked.connect(self.cancel)
+        cancelButton.clicked.connect(self.close)
   
         horizontalLayout = QHBoxLayout()
         #horizontalLayout.addWidget(self.contentsWidget)
@@ -44,11 +42,10 @@ class VerifyDialog(QDialog):
         buttonsLayout.addStretch(1)
         buttonsLayout.addWidget(runButton)
         buttonsLayout.addWidget(cancelButton)
-        
   
         mainLayout = QVBoxLayout()
         mainLayout.addLayout(horizontalLayout)
-        mainLayout.addStretch(1)
+        #mainLayout.addStretch(1)
         mainLayout.addSpacing(12)
         mainLayout.addLayout(buttonsLayout)
   
