@@ -6,6 +6,8 @@ from PyQt5.QtWidgets import *
 # For ideas, see:
 # http://nullege.com/codes/show/src@p@y@pyqt5-HEAD@examples@dialogs@configdialog@configdialog.py/220/PyQt5.QtWidgets.QListWidgetItem.setTextAlignment/python
 
+# https://doc.qt.io/qt-5/qlistwidget.html#itemEntered
+
 class VerifyDialog(QDialog):
     def __init__(self, parent=None):
         super(VerifyDialog, self).__init__(parent)
@@ -18,15 +20,6 @@ class VerifyDialog(QDialog):
             item.setCheckState(Qt.Checked) 
             self.listWidget.addItem(item)
 
-        #self.pagesWidget = QStackedWidget()
-        #self.pagesWidget.addWidget(ConfigurationPage())
-        #self.pagesWidget.addWidget(UpdatePage())
-        #self.pagesWidget.addWidget(QueryPage())
-  
-  
-        #self.createIcons()
-        #self.contentsWidget.setCurrentRow(0)
-  
         runButton = QPushButton("Run")
         runButton.clicked.connect(self.exec)
 
@@ -34,8 +27,6 @@ class VerifyDialog(QDialog):
         cancelButton.clicked.connect(self.close)
   
         horizontalLayout = QHBoxLayout()
-        #horizontalLayout.addWidget(self.contentsWidget)
-        #horizontalLayout.addWidget(self.pagesWidget, 1)
         horizontalLayout.addWidget(self.listWidget, 1)
   
         buttonsLayout = QHBoxLayout()
@@ -45,7 +36,6 @@ class VerifyDialog(QDialog):
   
         mainLayout = QVBoxLayout()
         mainLayout.addLayout(horizontalLayout)
-        #mainLayout.addStretch(1)
         mainLayout.addSpacing(12)
         mainLayout.addLayout(buttonsLayout)
   
@@ -54,8 +44,12 @@ class VerifyDialog(QDialog):
         self.show()
 
     def exec(self):
-        print("Exec!")
-
+        print("The following are selected:")
+        allItems = self.listWidget.findItems("",Qt.MatchContains)
+        print("Selected items: {}".format(len(allItems)))
+        for item in allItems:
+            if item.checkState():
+                print(item.text())
 
 if __name__=="__main__":
     app = QApplication(sys.argv)
