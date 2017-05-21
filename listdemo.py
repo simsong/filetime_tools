@@ -9,6 +9,14 @@ from PyQt5.QtWidgets import *
 # https://doc.qt.io/qt-5/qlistwidget.html#itemEntered
 
 class VerifyDialog(QDialog):
+    def saveClickState(self, index):
+        item = self.listWidget.currentItem()
+        self.newState = Qt.Checked if item.checkState()==Qt.Unchecked else Qt.Unchecked
+        item.setCheckState(self.newState)
+
+    def setClickState(self, item):
+        item.setCheckState(self.newState)
+        
     def __init__(self, parent=None):
         super(VerifyDialog, self).__init__(parent)
 
@@ -16,9 +24,12 @@ class VerifyDialog(QDialog):
 
         for i in range(100):
             item = QListWidgetItem("Item %i" % i)
-            # could be Qt.Unchecked; setting it makes the check appear
             item.setCheckState(Qt.Checked) 
             self.listWidget.addItem(item)
+
+        self.listWidget.pressed.connect(self.saveClickState)       # Get when the mouse goes down
+        #self.listWidget.clicked.connect(self.saveClickState)      # Get when the mouse goes up
+        self.listWidget.itemEntered.connect(self.setClickState)    # when the mouse is dragged
 
         runButton = QPushButton("Run")
         runButton.clicked.connect(self.exec)
@@ -49,7 +60,7 @@ class VerifyDialog(QDialog):
         print("Selected items: {}".format(len(allItems)))
         for item in allItems:
             if item.checkState():
-                print(item.text())
+                print(item.text(),item.data)
 
 if __name__=="__main__":
     app = QApplication(sys.argv)
