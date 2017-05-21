@@ -99,18 +99,19 @@ def newname(fname):
             return os.path.join(dirname,basename_new)
     return None
         
-def interactive_fix_name(fname):
-    import sys
-    import os
+def getch():
     if sys.platform=='darwin':
         import readchar
-        getch = readchar.readchar
+        return readchar.readchar()
     if sys.platform=='win32':
         import msvcrt
-        def wingetch():
-            return msvcrt.getch().decode('utf-8')
-        getch = wingetch
-    fname_new = newname(fname)
+        return msvcrt.getch().decode('utf-8')
+    assert(0)
+    
+
+def cui_fix_name(fname,fname_new):
+    import sys
+    import os
     if fname_new:
         print("{} ==> {} ".format(fname,os.path.basename(fname_new)),end="")
         print()
@@ -129,9 +130,12 @@ if __name__=="__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Seek out and rename MDY timestamps',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--gui", action='store_true')
     parser.add_argument("roots",  nargs="+", help="Files/directories to search")
 
     args = parser.parse_args()
+
+    movelist = []
 
     for root in args.roots:
         for (dirpath, dirnames, filenames) in os.walk(root):
@@ -139,5 +143,16 @@ if __name__=="__main__":
                 continue        # don't do this directory
             for filename in filenames:
                 fname = os.path.join(dirpath,filename)
-                interactive_fix_name(fname)
+                fname_new = newname(fname)
+                if fname_new:
+                    if args.gui:
+                        movelist.append([fname,fname_new])
+                    else:
+                        cui_fix_name(fname,fname_new)
+    if args.gui:
+        from PyQt5.QtWidgets import QApplication
+        from fileMoverDialog import VerifyDialog
+        app = QApplication(sys.argv)
+        dialog = VerifyDialog(movelist)
+        sys.exit(app.exec_())
     
