@@ -109,6 +109,10 @@ def getch():
     assert(0)
     
 
+def gui_renamer(fname,fname_new):
+    if os.path.exists(fname) and not os.path.exists(fname_new):
+        os.rename(fname,fname_new)
+
 def cui_fix_name(fname,fname_new):
     import sys
     import os
@@ -124,8 +128,9 @@ def cui_fix_name(fname,fname_new):
         if ch in "q":
             exit(0)
         if ch in "y \n\r":
-            os.rename(fname,fname_new)
+            gui_renamer(fname,fname_new)
             
+
 if __name__=="__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Seek out and rename MDY timestamps',
@@ -153,6 +158,6 @@ if __name__=="__main__":
         from PyQt5.QtWidgets import QApplication
         from fileMoverDialog import VerifyDialog
         app = QApplication(sys.argv)
-        dialog = VerifyDialog(movelist)
+        dialog = VerifyDialog(movelist=movelist,callback=gui_renamer)
         sys.exit(app.exec_())
     

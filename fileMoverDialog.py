@@ -1,4 +1,5 @@
 import sys
+import os
 from PyQt5.QtCore import QDate, QSize, Qt, QTimer
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -10,7 +11,10 @@ from PyQt5.QtWidgets import *
 
 class FileMoverListItem(QListWidgetItem):
     def __init__(self, source, dest ):
-        super(QListWidgetItem, self).__init__("{} => {}".format(source,dest))
+        text = "{}: {}   →   {}".format(os.path.dirname(source),
+                                     os.path.basename(source),
+                                     os.path.basename(dest))
+        super(QListWidgetItem, self).__init__(text)
         self.source = source
         self.dest   = dest
 
@@ -83,14 +87,11 @@ class VerifyDialog(QDialog):
         if not self.allItems:
             self.timer.stop()
         
-
 if __name__=="__main__":
-    def mlcb(item):
+    def cb(item):
         import time
         print("{} => {}".format(item.source,item.dest))
-        time.sleep(.05)
-    # Debug
-    movelist = [[f"this {i}", f"that {i}"] for i in range(1,100)]
+    movelist = [[f"a/b/c/d/source{i}", f"a/b/c/d/dest{i}"] for i in range(1,100)]
     app = QApplication(sys.argv)
-    dialog = VerifyDialog(movelist,mlcb)
+    dialog = VerifyDialog(movelist,cb)
     sys.exit(app.exec_())
