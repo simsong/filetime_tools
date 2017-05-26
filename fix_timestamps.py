@@ -11,6 +11,8 @@ import sys
 import os
 import re
 
+debug = True
+
 # Patterns to skip
 skip_pats = [re.compile("[0-9a-f]{16,}",re.I), # 16 hex digits
              re.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",re.I), # GUID
@@ -18,7 +20,13 @@ skip_pats = [re.compile("[0-9a-f]{16,}",re.I), # 16 hex digits
              ]
 
 mdy_pats  = [re.compile("[^0-9]([0-1][0-9])[.]?([0-3][0-9])[.]?(([12][90])?[89012][0-9])[^0-9]"), # MMDDYYYY
-        re.compile("[^0-9]([0-1]?[0-9])[.]([0-3]?[0-9])[.]([89012][0-9])[^0-9]") # M.D.YY     (people who are careless)
+        re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.](19[89][0-9])[^0-9]"), # MM.DD.19YY    
+        re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.]([89][0-9])[^0-9]"), # MM.DD.YY    
+        re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.](20[012][0-9])[^0-9]"), # MM.DD.20YY    
+        re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.]([012][0-9])[^0-9]"), # MM.DD.YY    
+        re.compile("[^0-9]([0-9])[.]([0-3][0-9])[.]([89012][0-9])[^0-9]"), # M.DD.YY     (people who are careless)
+        re.compile("[^0-9]([0-1][0-9])[.]([0-9])[.]([89012][0-9])[^0-9]"), # MM.D.YY     (people who are careless)
+        re.compile("[^0-9]([0-9])[.]([0-9])[.]([89012][0-9])[^0-9]") # M.D.YY           (people who are careless)
         ]
 # Dirs to skip
 skip_dirs = set(["/assets/","/mail downloads/", "conda-meta", "site-packages"])
@@ -92,10 +100,19 @@ def newname(fname):
             if not valid_month(new_month): return None
             if not valid_day(new_day): return None
 
-            basename_new = basename.replace(month,"MONTH",1).replace(day,"DAY",1).replace(year,"YEAR",1)
-            basename_new = basename_new.replace("MONTHDAYYEAR","MONTH-DAY-YEAR")
-            basename_new = basename_new.replace("MONTH.DAY.YEAR","MONTH-DAY-YEAR")
-            basename_new = basename_new.replace("MONTH",new_year,1).replace("DAY",new_month,1).replace("YEAR",new_day,1)
+            # Look for a simple replacement, otherwise replace part-by-part
+            fmt0 = f"{month}.{day}.{year}"
+            fmt1 = f"{month}{day}{year}"
+            iso = f"{new_year}-{new_month}-{new_day}"
+            if fmt0 in basename:
+                basename_new = basename.replace(fmt0,iso)
+            elif fmt1 in basename:
+                basename_new = basename.replace(fmt1,iso)
+            else:
+                basename_new = basename.replace(month,"MONTH",1).replace(day,"DAY",1).replace(year,"YEAR",1)
+                basename_new = basename_new.replace("MONTHDAYYEAR","MONTH-DAY-YEAR")
+                basename_new = basename_new.replace("MONTH.DAY.YEAR","MONTH-DAY-YEAR")
+                basename_new = basename_new.replace("MONTH",new_year,1).replace("DAY",new_month,1).replace("YEAR",new_day,1)
             return os.path.join(dirname,basename_new)
     return None
         
@@ -109,7 +126,10 @@ def getch():
     assert(0)
     
 
-def gui_renamer(fname,fname_new):
+def file_renamer(fname,fname_new):
+    if debug:
+        print("file_renamer({},{})".format(fname,fname_new))
+        return
     if os.path.exists(fname) and not os.path.exists(fname_new):
         os.rename(fname,fname_new)
 
@@ -128,7 +148,7 @@ def cui_fix_name(fname,fname_new):
         if ch in "q":
             exit(0)
         if ch in "y \n\r":
-            gui_renamer(fname,fname_new)
+            file_renamer(fname,fname_new)
             
 
 if __name__=="__main__":
@@ -136,11 +156,17 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Seek out and rename MDY timestamps',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--gui", action='store_true')
-    parser.add_argument("roots",  nargs="+", help="Files/directories to search")
+    parser.add_argument("--test", help="explain how a file will change")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("roots",  nargs="*", help="Files/directories to search")
 
     args = parser.parse_args()
 
     movelist = []
+
+    if args.test:
+        print("{} => {}".format(args.test,newname(args.test)))
+        exit(0)
 
     for root in args.roots:
         for (dirpath, dirnames, filenames) in os.walk(root):
@@ -156,8 +182,8 @@ if __name__=="__main__":
                         cui_fix_name(fname,fname_new)
     if args.gui:
         from PyQt5.QtWidgets import QApplication
-        from fileMoverDialog import VerifyDialog
+        from fileMoverDialog2 import VerifyDialog
         app = QApplication(sys.argv)
-        dialog = VerifyDialog(movelist=movelist,callback=gui_renamer)
+        dialog = VerifyDialog(movelist=movelist,callback=file_renamer)
         sys.exit(app.exec_())
     

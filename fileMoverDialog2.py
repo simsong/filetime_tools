@@ -9,11 +9,6 @@ from PyQt5.QtWidgets import *
 
 # https://doc.qt.io/qt-5/qlistwidget.html#itemEntered
 
-class Mover:
-    def __init__(self,source,dest):
-        self.source = source
-        self.dest   = dest
-
 class FileMoverListItem(QListWidgetItem):
     def __init__(self, source, dest ):
         text = "{}: {}   →   {}".format(os.path.dirname(source),
@@ -64,7 +59,7 @@ class VerifyDialog(QDialog):
         self.tableWidget.setColumnCount(4)
         self.tableWidget.setHorizontalHeaderLabels(['','Dir','Source','Dest'])
         for i in range(len(self.movelist)):
-            (source,dest) = movelist[i]
+            (source,dest) = self.movelist[i]
             item = QTableWidgetItem()
             item.setCheckState(Qt.Checked)
             self.tableWidget.setItem(i,0, item)
@@ -76,7 +71,7 @@ class VerifyDialog(QDialog):
         self.tableWidget.itemSelectionChanged.connect(self.on_changed)
         self.tableWidget.cellPressed.connect(self.on_cell_pressed)
         self.tableWidget.itemClicked.connect(self.on_item_clicked)
-        self.tableWidget.resizeRowsToContents()
+        #self.tableWidget.resizeRowsToContents()
         self.tableWidget.resizeColumnsToContents()
         self.newState = None
 
@@ -125,7 +120,7 @@ class VerifyDialog(QDialog):
             self.tableWidget.scrollToItem(item)
             if item.checkState():
                 if self.callback:
-                    self.callback(Mover(movelist[self.currentRow][0],movelist[self.currentRow][1]))
+                    self.callback(self.movelist[self.currentRow][0],self.movelist[self.currentRow][1])
                 for col in range(0,self.tableWidget.columnCount()):
                     item.setBackground(QColor("cyan"))
                 item.setCheckState(Qt.Unchecked)

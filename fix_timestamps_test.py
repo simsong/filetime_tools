@@ -11,9 +11,13 @@ def test_newname():
             ["name.1.2.89.jpg","name.1989-01-02.jpg"],
             ["photo-04022014.bmp","photo-2014-04-02.bmp"],
             ["photo-04.02.2014.jpeg","photo-2014-04-02.jpeg"],
-            ["Supplies3.8.13.doc","Supplies2013-05-30.doc"]
+            ["Supplies3.8.13.doc","Supplies2013-03-08.doc"],
+            ["Interaction 2015 USAID Open Data Policy Brief - 3.26.15.pdf",
+             "Interaction 2015 USAID Open Data Policy Brief - 2015-03-26.pdf"],
+            ["SE/JetsamEvent-2017-03-31-063700.ips",None]
             ]
     for (old,new) in pats:
+        print("{} => {}".format(old,new))
         assert newname(old)==new
 
 def test_is_skipdir():
@@ -41,8 +45,6 @@ def test_valid_year():
     assert valid_year(2025) == True
     assert valid_year(2085) == False
 
-def test_newname():
-    assert newname("SE/JetsamEvent-2017-03-31-063700.ips") == None
 
 if __name__=="__main__":
     test_newname()
