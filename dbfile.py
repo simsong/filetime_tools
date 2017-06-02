@@ -2,6 +2,8 @@
 # Methods that return File(pathid,dirname,filename) for searches
 #
 
+import datetime
+
 class SLGSQL:
     def iso_now():
         """Report current time in ISO-8601 format"""

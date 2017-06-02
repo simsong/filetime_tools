@@ -10,6 +10,8 @@ import os
 import sys
 import zipfile
 import time
+from dbfile import DBFile, SLGSQL
+
 
 COMMIT_RATE = 10  # commit every 10 directories
 
@@ -37,9 +39,10 @@ def open_zipfile(path):
 
 class Scanner(object):
     """Class to scan a directory and store the results in the database."""
-    def __init__(self, conn):
+    def __init__(self, conn, args):
         self.conn = conn
         self.c = self.conn.cursor()
+        self.args = args
 
     def get_hashid(self, hash):
         self.c.execute("INSERT or IGNORE INTO hashes (hash) VALUES (?);", (hash,))
@@ -87,8 +90,8 @@ class Scanner(object):
             else:
                 hashid = self.get_hashid(hash_file(handle))
             self.c.execute("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (?,?,?,?,?)",
-                           (pathid, mtime, st_size, hashid, scanid))
-            if args.vfiles:
+                           (pathid, mtime, file_size, hashid, scanid))
+            if self.args.vfiles:
                 print("{} {}".format(path, file_size))
         except PermissionError as e:
             pass
@@ -105,13 +108,13 @@ class Scanner(object):
         except FileNotFoundError as e:
             return
 
-        self.insert_file(path,st.mtime,st.size,open(path,"rb"),scanid)
+        self.insert_file(path,st.st_mtime,st.st_size,open(path,"rb"),scanid)
 
     def process_zipfile(self, scanid, path, zf):
         """Scan a zip file and insert it into the database"""
-        for name in zf.namelist():
-            zi = zf.getinfo(name)
-            self.insert_file(path+"/"+zi.filename, zi.date_time, zi.file_size,zf.open("name","r"), scanid)
+        for zi in zf.infolist():
+            mtime = time.mktime(zi.date_time + (0,0,0))
+            self.insert_file(path+"/"+zi.filename, mtime, zi.file_size,zf.open(zi.filename,"r"), scanid)
 
     def ingest(self, root):
         """Ingest everything from the root"""
@@ -125,15 +128,16 @@ class Scanner(object):
         dircount = 0
         t0 = time.time()
         for (dirpath, dirnames, filenames) in os.walk(root):
-            if args.vdirs:
-                print("{}".format(dirpath), end='\n' if args.vfiles else '')
+            if self.args.vdirs:
+                print("{}".format(dirpath), end='\n' if self.args.vfiles else '')
             for filename in filenames:
-                self.process_filepath(scanid, os.path.join(dirpath, filename))
-                zf = open_zipfile(path)
+                zipfile = os.path.join(dirpath, filename)
+                self.process_filepath(scanid, zipfile)
+                zf = open_zipfile(zipfile)
                 if zf:
-                    self.process_zipfile(scanid,path, zf)
+                    self.process_zipfile(scanid,zipfile, zf)
 
-            if args.vdirs:
+            if self.args.vdirs:
                 print("\r{}:  {}".format(dirpath,len(filenames)))
             count += len(filenames)
             dircount += 1

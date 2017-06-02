@@ -345,4 +345,4 @@ if __name__ == "__main__":
 
     root = get_root(conn)
     print("Scanning: {}".format(root))
-    Scanner(conn).ingest(root)
+    Scanner(conn,args).ingest(root)
