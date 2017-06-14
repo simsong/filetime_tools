@@ -24,9 +24,24 @@ class VerifyDialog(QDialog):
 
         self.movelist = movelist
         self.callback  = callback
-        self.createTable()
+
+        self.layout = QGridLayout()
+
+        self.layout.addWidget(QLabel("Add Prefix"), 1, 0)
+        self.prefix = QLineEdit()
+        self.layout.addWidget(self.prefix, 1, 1)
+
+        self.layout.addWidget(QLabel("Add Suffix"), 2, 0)
+        self.suffix = QLineEdit()
+        self.layout.addWidget(self.suffix,     2, 1)
+
+        self.tableWidget = self.createTable()
         self.newState = Qt.Checked
         self.inPressed = False
+        self.layout.addWidget(self.tableWidget, 3, 0, 1, 2)
+
+        self.layout.setColumnStretch(0,1)
+        self.layout.setColumnStretch(1,1)
 
         runButton = QPushButton("Run")
         runButton.clicked.connect(self.exec)
@@ -37,43 +52,36 @@ class VerifyDialog(QDialog):
         horizontalLayout = QHBoxLayout()
         horizontalLayout.addWidget(self.tableWidget, 1)
   
-        buttonsLayout = QHBoxLayout()
-        buttonsLayout.addStretch(1)
-        buttonsLayout.addWidget(runButton)
-        buttonsLayout.addWidget(cancelButton)
-  
-        mainLayout = QVBoxLayout()
-        mainLayout.addLayout(horizontalLayout)
-        mainLayout.addSpacing(12)
-        mainLayout.addLayout(buttonsLayout)
-  
-        self.setLayout(mainLayout)
+        self.layout.addWidget(runButton, 4, 0)
+        self.layout.addWidget(cancelButton, 4, 1)
+
+        self.setLayout(self.layout)
         self.setWindowTitle("Config Dialog")
         self.show()
 
 
     def createTable(self):
         # Create table
-        self.tableWidget = QTableWidget()
-        self.tableWidget.setRowCount(len(self.movelist))
-        self.tableWidget.setColumnCount(4)
-        self.tableWidget.setHorizontalHeaderLabels(['','Dir','Source','Dest'])
+        tableWidget = QTableWidget()
+        tableWidget.setRowCount(len(self.movelist))
+        tableWidget.setColumnCount(4)
+        tableWidget.setHorizontalHeaderLabels(['','Dir','Source','Dest'])
         for i in range(len(self.movelist)):
             (source,dest) = self.movelist[i]
             item = QTableWidgetItem()
             item.setCheckState(Qt.Checked)
-            self.tableWidget.setItem(i,0, item)
-            self.tableWidget.setItem(i,1, QTableWidgetItem(os.path.dirname(source)))
-            self.tableWidget.setItem(i,2, QTableWidgetItem(os.path.basename(source)))
-            self.tableWidget.setItem(i,3, QTableWidgetItem(os.path.basename(dest)))
+            tableWidget.setItem(i,0, item)
+            tableWidget.setItem(i,1, QTableWidgetItem(os.path.dirname(source)))
+            tableWidget.setItem(i,2, QTableWidgetItem(os.path.basename(source)))
+            tableWidget.setItem(i,3, QTableWidgetItem(os.path.basename(dest)))
 
         # table selection change
-        self.tableWidget.itemSelectionChanged.connect(self.on_changed)
-        self.tableWidget.cellPressed.connect(self.on_cell_pressed)
-        self.tableWidget.itemClicked.connect(self.on_item_clicked)
-        #self.tableWidget.resizeRowsToContents()
-        self.tableWidget.resizeColumnsToContents()
-        self.newState = None
+        tableWidget.itemSelectionChanged.connect(self.on_changed)
+        tableWidget.cellPressed.connect(self.on_cell_pressed)
+        tableWidget.itemClicked.connect(self.on_item_clicked)
+        #tableWidget.resizeRowsToContents()
+        tableWidget.resizeColumnsToContents()
+        return tableWidget
 
     @pyqtSlot()
     def on_changed(self):

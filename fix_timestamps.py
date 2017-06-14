@@ -165,11 +165,12 @@ def cui_fix_name(fname,fname_new):
         if ch in "y \n\r":
             file_renamer(fname,fname_new)
             
-from PyQt5.QtWidgets import QWidget,QLabel
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
 from PyQt5 import QtCore
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QWidget,QLabel,QApplication
+
+from fileMoverDialog2 import VerifyDialog
 
 class DropWidget(QLabel):
     def __init__(self, *args, **kwargs):
@@ -185,6 +186,7 @@ class DropWidget(QLabel):
         for url in event.mimeData().urls():
             path = url.toLocalFile()
             print(path)
+
 
 
 # http://zetcode.com/gui/pyqt5/dragdrop/
@@ -215,8 +217,7 @@ class DragWindow(QWidget):
 
         self.layout.addWidget(QLabel("Add Suffix"), 2, 0)
         self.suffix = QLineEdit()
-        self.layout.addWidget(self.suffix, 2, 1)
-
+        self.layout.addWidget(self.suffix,     2, 1)
         self.layout.addWidget(self.listWidget, 3, 0, 1, 2, Qt.AlignCenter)
 
         self.setLayout(self.layout)
@@ -275,8 +276,6 @@ if __name__=="__main__":
         sys.exit(app.exec_())
 
     if args.gui:
-        from PyQt5.QtWidgets import QApplication
-        from fileMoverDialog2 import VerifyDialog
         app = QApplication(sys.argv)
         dialog = VerifyDialog(movelist=movelist,callback=file_renamer)
         sys.exit(app.exec_())
