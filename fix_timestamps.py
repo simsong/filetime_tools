@@ -170,7 +170,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import QWidget,QLabel,QApplication
 
-from fileMoverDialog2 import VerifyDialog
+from fileMoverDialog import VerifyDialog
 
 class DropWidget(QLabel):
     def __init__(self, *args, **kwargs):

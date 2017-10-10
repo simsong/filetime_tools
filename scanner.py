@@ -36,6 +36,9 @@ def open_zipfile(path):
         return None
     except zipfile.LargeZipFile:
         return None
+    except OSError as e:
+        print("OSError: {}".format(e))
+        return None
 
 class Scanner(object):
     """Class to scan a directory and store the results in the database."""
@@ -131,11 +134,13 @@ class Scanner(object):
             if self.args.vdirs:
                 print("{}".format(dirpath), end='\n' if self.args.vfiles else '')
             for filename in filenames:
-                zipfile = os.path.join(dirpath, filename)
-                self.process_filepath(scanid, zipfile)
-                zf = open_zipfile(zipfile)
+                path = os.path.join(dirpath, filename)
+                if not os.path.isfile(path):
+                    continue
+                self.process_filepath(scanid, path)
+                zf = open_zipfile(path)
                 if zf:
-                    self.process_zipfile(scanid,zipfile, zf)
+                    self.process_zipfile(scanid,path, zf)
 
             if self.args.vdirs:
                 print("\r{}:  {}".format(dirpath,len(filenames)))
