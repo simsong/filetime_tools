@@ -20,7 +20,7 @@ def test_newname():
         ["Supplies3.8.13.doc","Supplies2013-03-08.doc"],
         ["Interaction 2015 USAID Open Data Policy Brief - 3.26.15.pdf",
          "Interaction 2015 USAID Open Data Policy Brief - 2015-03-26.pdf"],
-        ["SE/JetsamEvent-2017-03-31-063700.ips",None],
+        ["SEJetsamEvent-2017-03-31-063700.ips",None],
         ["Statement_Sep 2016.pdf","Statement_2016-09.pdf"]
         ]
     for (old,new) in pats:

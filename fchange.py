@@ -315,7 +315,6 @@ if __name__ == "__main__":
         create_database(args.db, args.create)
         print("Created {}  root: {}".format(args.db, args.create))
 
-
     if args.scans:
         list_scans(sqlite3.connect(args.db))
         exit(0)

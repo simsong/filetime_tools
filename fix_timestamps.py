@@ -1,8 +1,8 @@
 #!/usr/bin/env python36
 #
 # fix_timestamps.py:
-# Scan the filesystem for timestamps in MMDDYY format and change them to YYYY-MM-DD
-#
+# Scan the filesystem for timestamps in MMDDYY format (and others) and change them to YYYY-MM-DD
+# Mods allow the automatic assignment of timestamps for JPEGs
 
 # Todo: 
 # - handle names
@@ -86,7 +86,8 @@ def valid_month(month): return 1 <= int(month) <= 12
 def valid_day(day):     return 1 <= int(day) <= 31
 
 def newname(fname):
-    """Look at a name and see if the name should be renamed. Return the new name, or None if no rename is necessary."""
+    """Look at a name and see if the name should be renamed. Return the
+new name, or None if no rename is necessary."""
 
     if is_skipdir(fname):
         return None
@@ -253,12 +254,12 @@ if __name__=="__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Seek out and rename MDY timestamps',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--drag", action="store_true")
-    parser.add_argument("--gui", action='store_true')
-    parser.add_argument("--test", help="explain how a file would change")
+    parser.add_argument("--drag",    action="store_true")
+    parser.add_argument("--gui",     action='store_true')
+    parser.add_argument("--test",    help="explain how a file would change")
     parser.add_argument("--dry-run", action='store_true', help="just print, don't do it.")
-    parser.add_argument("--debug", action="store_true")
-    parser.add_argument("roots",  nargs="*", help="Files/directories to search")
+    parser.add_argument("--debug",   action="store_true")
+    parser.add_argument("roots",     nargs="*", help="Files/directories to search")
 
     args = parser.parse_args()
 
