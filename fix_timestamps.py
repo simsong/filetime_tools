@@ -28,15 +28,29 @@ mdy_pats  = [re.compile("[^0-9]([0-1][0-9])[.]?([0-3][0-9])[.]?(([12][90])?[8901
         re.compile("[^0-9]([0-1][0-9])[.]([0-9])[.]([89012][0-9])[^0-9]"), # MM.D.YY     (people who are careless)
         re.compile("[^0-9]([0-9])[.]([0-9])[.]([89012][0-9])[^0-9]") # M.D.YY           (people who are careless)
         ]
+
 # Dirs to skip
 skip_dirs = set(["/assets/","/mail downloads/", "conda-meta", "site-packages"])
 
 # Extensions to skip
 skip_exts = set([".css",".js", ".jar", ".webhistory", ".ics"])
 
-MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+MONTHS = {"Jan":1,"January":1,
+          "Feb":2,"February":2,
+          "Mar":3,"March":3,
+          "Apr":4,"April":4,
+          "May":5,
+          "Jun":6,"June":6,
+          "Jul":7,"July":7,
+          "Aug":8,"August":8,
+          "Sep":9,"September":9,
+          "Oct":10,"October":10,
+          "Nov":11,"November":11,
+          "Dec":12,"December":12}
 
-my_re = re.compile("(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)([ .,_-]*)([12][89012][0-9][0-9])[^0-9]")
+my_re1 = re.compile("(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[ .,_-]*((?:19|20)[89012][0-9])($|[^0-9])")
+my_re2 = re.compile("(January|February|March|April|May|June|July|August|September|October|November|December)"
+                    "[ .,_-]*((?:19|20)[89012][0-9])($|[^0-9])")
 
 def is_skipdir(fname):
     fname_lower = fname.lower()
@@ -119,12 +133,20 @@ def newname(fname):
             return os.path.join(dirname,basename_new)
 
     # Look for a month and a year
-    m = my_re.search(basename)
-    if m:
-        month = MONTHS[m.group(1)]
-        year  = int(m.group(3))
-        basename_new = basename.replace(m.group(1)+m.group(2)+m.group(3),f"{year:04}-{month:02}")
-        return os.path.join(dirname,basename_new)
+    for myreg in [my_re1,my_re2]:
+        m = myreg.search(basename)
+        if m:
+            month = MONTHS[m.group(1)]
+            year  = int(m.group(2))
+            print("month=",month,"year=",year)
+            basename_new = basename.replace(m.group(1),"MONTH").replace(m.group(2),"YEAR")
+            basename_new = basename_new.replace("MONTH YEAR","YEAR-MONTH")
+            basename_new = basename_new.replace("MONTH.YEAR","YEAR-MONTH")
+            basename_new = basename_new.replace("MONTH. YEAR","YEAR-MONTH")
+            basename_new = basename_new.replace("MONTH, YEAR","YEAR-MONTH")
+            basename_new = basename_new.replace("MONTHYEAR","YEAR-MONTH")
+            basename_new = basename_new.replace("YEAR",f"{year:04}").replace("MONTH",f"{month:02}")
+            return os.path.join(dirname,basename_new)
     return None
         
 def getch():
