@@ -70,6 +70,7 @@ class VerifyDialog(QDialog):
             (source,dest) = self.movelist[i]
             item = QTableWidgetItem()
             item.setCheckState(Qt.Checked)
+            item.setFlats(Qt.NoItemFlags) # not editable
             tableWidget.setItem(i,0, item)
             tableWidget.setItem(i,1, QTableWidgetItem(os.path.dirname(source)))
             tableWidget.setItem(i,2, QTableWidgetItem(os.path.basename(source)))

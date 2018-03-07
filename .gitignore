@@ -1,14 +1,11 @@
-data.sqlite3
-jquery*.js
-words.json
 *.bak
+*.db
+*.sqlite3
 *~
 .DS_Store
-<<<<<<< HEAD
-=======
-out.json
 .cache
 __pycache__
->>>>>>> 566eb2118e88ba7fc9775be53d525366c6d570a6
-*.sqlite3
-*.db
+data.sqlite3
+jquery*.js
+out.json
+words.json

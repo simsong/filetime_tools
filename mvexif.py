@@ -40,6 +40,20 @@ def jpeg_exif_to_mtime(fn, commit=False):
         os.utime(fn,(timet,timet))
     return when
 
+def process_file(fn):
+    print("args.base=",args.base)
+    try:
+        when = jpeg_exif_to_mtime(fn,commit=args.commit)
+        nfn = os.path.dirname(fn)+"/"+args.base+"_"+when.strftime("%Y-%m-%d_%H%M%S")+".jpg"
+        if not os.path.exists(nfn):
+            print("{} -> {}".format(fn,nfn))
+            if args.commit:
+                os.rename(fn,nfn)
+        else:
+            print("{} X {}".format(fn,nfn))
+    except AttributeError as e:
+        print("Cannot process: {}".format(fn))
+
 if __name__=="__main__":
     import argparse
     import sys
@@ -49,21 +63,16 @@ if __name__=="__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--commit', help='Actually perform the changes', action='store_true')
-    parser.add_argument("base", help="string to prepend to each filename", nargs=1)
-    parser.add_argument("files", help="files to check/modify", nargs="+")
+    parser.add_argument("base", help="string to prepend to each filename")
+    parser.add_argument("files", help="files or directories to check/modify", nargs="+")
     
     args = parser.parse_args()
 
-    for fn in files:
-        try:
-            when = jpeg_exif_to_mtime(fn,commit=args.commit)
-            nfn = os.path.dirname(fn)+"/"+args.base+"_"+when.strftime("%Y-%m-%d_%H%M%S")+".jpg"
-            if not os.path.exists(nfn):
-                print("{} -> {}".format(fn,nfn))
-                if args.commit:
-                    os.rename(fn,nfn)
-            else:
-                print("{} X {}".format(fn,nfn))
-        except AttributeError as e:
-            print("Cannot process: {}".format(fn))
-
+    for fn in args.files:
+        if os.path.isfile(fn):
+            process_file(fn)
+        if os.path.isdir(fn):
+             for (dirpath, dirnames, filenames) in os.walk(fn):
+                 for filename in filenames:
+                     if filename.lower().endswith(".jpeg") or filename.lower().endswith(".jpg"):
+                         process_file(os.path.join(dirpath,filename))
