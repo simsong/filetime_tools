@@ -10,6 +10,7 @@
 import sys
 import os
 import re
+import datetime
 
 debug = False
 
@@ -28,6 +29,14 @@ mdy_pats  = [re.compile("[^0-9]([0-1][0-9])[.]?([0-3][0-9])[.]?(([12][90])?[8901
         re.compile("[^0-9]([0-1][0-9])[.]([0-9])[.]([89012][0-9])[^0-9]"), # MM.D.YY     (people who are careless)
         re.compile("[^0-9]([0-9])[.]([0-9])[.]([89012][0-9])[^0-9]") # M.D.YY           (people who are careless)
         ]
+
+
+year_pats = [re.compile("^([12][09]\d\d)$"),
+             re.compile("[^0-9]([12][09]\d\d)[^0-9]")
+             ]
+year_re = re.compile("^([12][09]\d\d)$")
+year_month_re = re.compile("^([12][09]\d\d)-(00|01|02|03|04|05|06|07|08|09|10|11|12)$")
+month_re = re.compile("^(00|01|02|03|04|05|06|07|08|09|10|11|12)$")
 
 # Dirs to skip
 skip_dirs = set(["/assets/","/mail downloads/", "conda-meta", "site-packages"])
@@ -150,6 +159,39 @@ new name, or None if no rename is necessary."""
             return os.path.join(dirname,basename_new)
     return None
         
+def get_year(path):
+    for part in path.split("/"):
+        m = year_re.search(part)
+        if m:
+            return m.group(1)
+        m = year_month_re.search(part)
+        if m:
+            return m.group(1)
+    return None
+    
+def get_month(part):
+    for part in part.split("/"):
+        m = year_month_re.search(part)
+        if m:
+            return m.group(2)
+        m = month_re.search(part)
+        if m:
+            return m.group(1)
+    return None
+
+def path_to_date(path):
+    """Given a path, return a date that's as good as we can get"""
+    ystr = get_year(path)
+    if ystr==None:
+        return None
+    y = int(ystr)
+    mstr = get_month(path)
+    try:
+        m = int(mstr)
+    except TypeError as e:
+        m = 1
+    return datetime.date(y,m,1) # default to the 1st
+
 def getch():
     if sys.platform=='darwin':
         import readchar

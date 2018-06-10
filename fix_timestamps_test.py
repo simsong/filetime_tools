@@ -5,6 +5,7 @@
 #
 
 from fix_timestamps import *
+import datetime
 
 def test_newname():
     pats = [
@@ -52,6 +53,17 @@ def test_valid_year():
     assert valid_year(2025) == True
     assert valid_year(2085) == False
 
+
+def test_path_to_date():
+    pats = [
+        ["2000/10/foo.jpg", datetime.date(2000,10,1)],
+        ["2000/foo.jpg", datetime.date(2000,1,1)],
+        ["foo.jpg", None]
+        ]
+    for (old,new) in pats:
+        print("{} => {}".format(old,new))
+        assert path_to_date(old) == new
+    
 
 if __name__=="__main__":
     test_newname()

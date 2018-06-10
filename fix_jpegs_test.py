@@ -1,4 +1,4 @@
-from mvexif import *
+from fix_jpegs import *
 import py.test
 
 FN = "test/img_3124.jpg"
