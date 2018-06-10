@@ -8,6 +8,8 @@ import os.path
 import time
 import re
 
+import fix_timestamps
+
 EXIF_TIME_TAGSET = ['DateTime','DateTimeDigitized','DateTimeOriginal']
 
 def file_exif(fn,tagset=PIL.ExifTags.TAGS.values()):
@@ -48,14 +50,17 @@ def jpeg_exif_to_mtime(fn):
 
 
 def process_file(fn):
+    pathdate = fix_timestamps.path_to_date(fn)
+    print("{}: {}".format(fn,pathdate))
     exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
     if exif==None:
+        if args.info() and (fn.lower().endswith(".jpg") or fn.lower().endswith(".jepg")):
+            print("   {}: NO EXIF".format(fn))
         return
     if args.info:
         print("{}:".format(fn))
         for (k,v) in exif.items():
             print("   {}: {}".format(k,v))
-        return
     if args.rename:
         when = jpeg_exif_to_mtime(fn)
         nfn = os.path.dirname(fn)+"/"+args.base+"_"+when.strftime("%Y-%m-%d_%H%M%S")+".jpg"
@@ -77,10 +82,8 @@ if __name__=="__main__":
 
     parser.add_argument('--rename', help='Rename the JPEG to be consistent with exif', action='store_true')
     parser.add_argument("--dry-run", help="don't actually change anything", action='store_true')
-    parser.add_argument('--commit', help='Actually perform the changes', action='store_true')
     parser.add_argument("--base", help="string to prepend to each filename", default='')
     parser.add_argument("--info", help="Just print exif info for each image", action='store_true')
-    parser.add_argument("--fix" , help="fix the EXIF if its wrong")
     parser.add_argument("--verbose", help="print lots of stuff")
     parser.add_argument("files", help="files or directories to check/modify", nargs="+")
     

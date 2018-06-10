@@ -31,12 +31,6 @@ mdy_pats  = [re.compile("[^0-9]([0-1][0-9])[.]?([0-3][0-9])[.]?(([12][90])?[8901
         ]
 
 
-year_pats = [re.compile("^([12][09]\d\d)$"),
-             re.compile("[^0-9]([12][09]\d\d)[^0-9]")
-             ]
-year_re = re.compile("^([12][09]\d\d)$")
-year_month_re = re.compile("^([12][09]\d\d)-(00|01|02|03|04|05|06|07|08|09|10|11|12)$")
-month_re = re.compile("^(00|01|02|03|04|05|06|07|08|09|10|11|12)$")
 
 # Dirs to skip
 skip_dirs = set(["/assets/","/mail downloads/", "conda-meta", "site-packages"])
@@ -159,8 +153,16 @@ new name, or None if no rename is necessary."""
             return os.path.join(dirname,basename_new)
     return None
         
+year_pats = [re.compile("^([12][09]\d\d)$"),
+             re.compile("[^0-9]([12][09]\d\d)[^0-9]")
+             ]
+year_re = re.compile("[^0-9]([12][09]\d\d)[^0-9]")
+month_re = re.compile("[^0-9](00|01|02|03|04|05|06|07|08|09|10|11|12)[^0-9]")
+year_month_re = re.compile("[^0-9]([12][09]\d\d)-(00|01|02|03|04|05|06|07|08|09|10|11|12)[^0-9]")
+
 def get_year(path):
     for part in path.split("/"):
+        part = " "+part+" "
         m = year_re.search(part)
         if m:
             return m.group(1)
@@ -171,6 +173,7 @@ def get_year(path):
     
 def get_month(part):
     for part in part.split("/"):
+        part = " "+part+" "
         m = year_month_re.search(part)
         if m:
             return m.group(2)
@@ -182,6 +185,7 @@ def get_month(part):
 def path_to_date(path):
     """Given a path, return a date that's as good as we can get"""
     ystr = get_year(path)
+    print("ystr=",ystr)
     if ystr==None:
         return None
     y = int(ystr)

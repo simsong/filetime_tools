@@ -55,10 +55,12 @@ def test_valid_year():
 
 
 def test_path_to_date():
+    from datetime import date
     pats = [
-        ["2000/10/foo.jpg", datetime.date(2000,10,1)],
-        ["2000/foo.jpg", datetime.date(2000,1,1)],
-        ["foo.jpg", None]
+        ["2000/10/foo.jpg", date(2000,10,1)],
+        ["2000/foo.jpg",    date(2000,1,1)],
+        ["foo.jpg",         None],
+        ["/Users/simsong/Pictures/1985 Israel/1985-07Israel  _193.jpg", date(1985,7,1)]
         ]
     for (old,new) in pats:
         print("{} => {}".format(old,new))
