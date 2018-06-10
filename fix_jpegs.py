@@ -48,15 +48,33 @@ def jpeg_exif_to_mtime(fn):
         os.utime(fn,(timet,timet))
     return when
 
+def jpeg_set_exif_times(fn,date):
+    from subprocess import run,PIPE
+    cmd = ['jhead','-ds{}:{:02}:{:02}'.format(date.year,date.month,date.day), fn]
+    if args.dry_run:
+        print("DRY RUN: "+" ".join(cmd))
+        return
+    p = run(cmd,stdout=PIPE,encoding='utf-8')
+    if "contains no Exif timestamp to change" in p.stdout:
+        print("adding exif")
+        p = run([cmd[0],'-mkexif'] + cmd[1:])
+
 
 def process_file(fn):
     pathdate = fix_timestamps.path_to_date(fn)
-    print("{}: {}".format(fn,pathdate))
+    print("{}: date should be {}".format(fn,pathdate))
     exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
     if exif==None:
         if args.info() and (fn.lower().endswith(".jpg") or fn.lower().endswith(".jepg")):
             print("   {}: NO EXIF".format(fn))
+        jpeg_set_exif_times(fn,pathdate)
         return
+    exiftime = file_exif_time(fn)
+    if exiftime==None:
+        if args.info:
+            print("   {}: NO EXIF DATE".format(fn))
+        jpeg_set_exif_times(fn,pathdate)
+
     if args.info:
         print("{}:".format(fn))
         for (k,v) in exif.items():

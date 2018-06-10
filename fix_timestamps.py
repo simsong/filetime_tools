@@ -185,7 +185,6 @@ def get_month(part):
 def path_to_date(path):
     """Given a path, return a date that's as good as we can get"""
     ystr = get_year(path)
-    print("ystr=",ystr)
     if ystr==None:
         return None
     y = int(ystr)
