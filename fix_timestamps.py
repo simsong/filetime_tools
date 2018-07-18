@@ -156,7 +156,7 @@ new name, or None if no rename is necessary."""
 year_pats = [re.compile("^([12][09]\d\d)$"),
              re.compile("[^0-9]([12][09]\d\d)[^0-9]")
              ]
-year_re = re.compile("[^0-9]([12][09]\d\d)[^0-9]")
+year_re = re.compile("[^0-9]([12][089]\d\d)[^0-9]")
 month_re = re.compile("[^0-9](00|01|02|03|04|05|06|07|08|09|10|11|12)[^0-9]")
 year_month_re = re.compile("[^0-9]([12][09]\d\d)-(00|01|02|03|04|05|06|07|08|09|10|11|12)[^0-9]")
 

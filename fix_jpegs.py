@@ -61,21 +61,28 @@ def jpeg_set_exif_times(fn,date):
 
 
 def process_file(fn):
-    pathdate = fix_timestamps.path_to_date(fn)
-    print("{}: date should be {}".format(fn,pathdate))
+    exif_time_set = False
+    pathdate = fix_timestamps.path_to_date(fn) 
     exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
-    if exif==None:
-        if args.info() and (fn.lower().endswith(".jpg") or fn.lower().endswith(".jepg")):
-            print("   {}: NO EXIF".format(fn))
-        jpeg_set_exif_times(fn,pathdate)
+    if pathdate:
+        # Check to see if the date on the path agrees with the JPEG date...
+        print("{}: date should be {}".format(fn,pathdate))
+        if exif==None:
+            if args.info and (fn.lower().endswith(".jpg") or fn.lower().endswith(".jepg")):
+                print("   {}: NO EXIF".format(fn))
+            jpeg_set_exif_times(fn,pathdate)
+            return
+        exiftime = file_exif_time(fn)
+        if exiftime==None:
+            if args.info:
+                print("   {}: NO EXIF DATE".format(fn))
+            jpeg_set_exif_times(fn,pathdate)
+            exif_time_set = True
+    if not exif:
+        exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
+    if not exif:
         return
-    exiftime = file_exif_time(fn)
-    if exiftime==None:
-        if args.info:
-            print("   {}: NO EXIF DATE".format(fn))
-        jpeg_set_exif_times(fn,pathdate)
-
-    if args.info:
+    if args.info and not exif_time_set:
         print("{}:".format(fn))
         for (k,v) in exif.items():
             print("   {}: {}".format(k,v))
