@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # coding=UTF-8
 #
-# File change detector
+"""File change detector
+Creates a database of files and hashes. Optionally deletes delete dups.
+"""
 
 __version__ = '0.0.1'
 import datetime
@@ -203,17 +205,29 @@ def report_dups(conn,scan0):
         out.write("Total wasted space: {}MB".format(total_wasted/1000000))
 
 
-def report_dups(conn, b):
+def report_dups(conn, b, rmdups=False, lndups=False):
+    if lndups:
+        raise RuntimeError("--lndups not implemented yet")
     duplicate_bytes = 0
+    duplicate_files = 0
     for dups in get_duplicate_files(conn, b):
         if dups[0].size > args.dupsize:
             print("Filesize: {:,}  Count: {}".format(dups[0].size, len(dups)))
             for dup in dups:
-                print("    {}".format(dup.get_path(conn)))
+                path = dup.get_path(conn)
+                print("{}".format(path))
+                # only delete dups[1..n] if dups[0] still exists
+                if rmdups:
+                    path0 = dups[0].get_path(conn)
+                    if dup!=dups[0] and path!=path0 and os.path.exists(path0):
+                        print(f"   rm {path}")
+                        os.unlink(path)
             print()
+            duplicate_files += len(dups)-1
             duplicate_bytes += dups[0].size * (len(dups) - 1)
     print("\n-----------")
-    print("Total space duplicated by files larger than {:,}: {:,}".format(args.dupsize, duplicate_bytes))
+    print("Total space duplicated by {} files larger than {:,} bytes: {:,}".
+          format(duplicate_files, args.dupsize, duplicate_bytes))
 
 def jreport(conn):
     from collections import defaultdict
@@ -294,7 +308,7 @@ def create_database(name, root):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='Compute file changes',
+    parser = argparse.ArgumentParser(description='Scan a directory and report the file changes. Currently works for a single root',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--create", help="Create a database for a given ROOT")
     parser.add_argument("--db", help="Specify database location", default="data.sqlite3")
@@ -303,10 +317,13 @@ if __name__ == "__main__":
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
     parser.add_argument("--dups", help="Report duplicates for most recent scan", action='store_true')
+    parser.add_argument("--rmdups", help="Remove dups; requires --dups", action='store_true')
+    parser.add_argument("--lndups", help="Hard link dups; requires --dups", action='store_true')
     parser.add_argument("--dupsize", help="Don't report dups smaller than dupsize", default=1024 * 1024, type=int)
     parser.add_argument("--out", help="Specifies output filename")
     parser.add_argument("--vfiles", help="Report each file as ingested",action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested",action="store_true")
+    parser.add_argument("--scan", help="Do a scan (no longer default)", action='store_true')
 
     args = parser.parse_args()
 
@@ -316,7 +333,6 @@ if __name__ == "__main__":
 
     if args.scans:
         list_scans(sqlite3.connect(args.db))
-        exit(0)
 
     # open database and give me a big cache
     conn = sqlite3.connect(args.db)
@@ -326,7 +342,6 @@ if __name__ == "__main__":
     if args.root:
         c = conn.cursor()
         print("Root: {}".format(get_root(conn)))
-        exit(0)
 
     if args.report:
         m = re.search("(\d+)-(\d+)", args.report)
@@ -338,9 +353,16 @@ if __name__ == "__main__":
     if args.jreport:
         jreport(conn)
 
-    if args.dups:
-        report_dups(conn, last_scan(conn))
+    if args.rmdups and not args.dups:
+        raise RuntimeError("--rmdups requires --dups")
 
-    root = get_root(conn)
-    print("Scanning: {}".format(root))
-    Scanner(conn,args).ingest(root)
+    if args.lndups and not args.dups:
+        raise RuntimeError("--lndups requires --dups")
+
+    if args.dups:
+        report_dups(conn, last_scan(conn), rmdups=args.rmdups, lndups=args.lndups)
+
+    if args.scan:
+        root = get_root(conn)
+        print("Scanning: {}".format(root))
+        Scanner(conn,args).ingest(root)

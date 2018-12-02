@@ -20,6 +20,8 @@ skip_pats = [re.compile("[0-9a-f]{16,}",re.I), # 16 hex digits
              re.compile("[12][012389][0-9][0-9]-[01][0-9]-[0-3][0-9]") # ISO-8601
              ]
 
+ymd_pats = [re.compile(r"[^\d]([12]\d\d\d)-([0-1]\d)-([0-3]\d)[^\d]")]  # YYYY-MM-DD
+
 mdy_pats  = [re.compile("[^0-9]([0-1][0-9])[.]?([0-3][0-9])[.]?(([12][90])?[89012][0-9])[^0-9]"), # MMDDYYYY
         re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.](19[89][0-9])[^0-9]"), # MM.DD.19YY    
         re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.]([89][0-9])[^0-9]"), # MM.DD.YY    
@@ -87,6 +89,14 @@ def make_digit2(val):
 def valid_year(year):   return 1980 <= int(year) <= 2030
 def valid_month(month): return 1 <= int(month) <= 12
 def valid_day(day):     return 1 <= int(day) <= 31
+
+def find_ymd(fname):
+    """If a year-month-day pattern is in s, return a date with the year, month and day"""
+    for p in ymd_pats:
+        m = p.search(fname)
+        if m:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    return None
 
 def newname(fname):
     """Look at a name and see if the name should be renamed. Return the
@@ -184,6 +194,11 @@ def get_month(part):
 
 def path_to_date(path):
     """Given a path, return a date that's as good as we can get"""
+    for p in ymd_pats:
+        d = find_ymd(path)
+        if d:
+            return d
+
     ystr = get_year(path)
     if ystr==None:
         return None

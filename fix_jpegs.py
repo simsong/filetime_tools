@@ -26,24 +26,27 @@ def file_exif(fn,tagset=PIL.ExifTags.TAGS.values()):
     # in the loop below, k is the numberic key of the exif attribute, e.g. 271
     #                    v is the value of the exif attribute e.g. "Apple"
     exif = {PIL.ExifTags.TAGS[k]: v for k, v in img._getexif().items() 
-            if PIL.ExifTags.TAGS[k] in tagset}
+            if k in PIL.ExifTags.TAGS and PIL.ExifTags.TAGS[k] in tagset}
     return exif
 
 def file_exif_time(fn):
     """Return the tags that have to do with date"""
     exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
-    for tag in EXIF_TIME_TAGSET:
-        if (tag in exif) and (exif[tag]):
-            return exif[tag]
+    if exif:
+        for tag in EXIF_TIME_TAGSET:
+            if (tag in exif) and (exif[tag]):
+                return exif[tag]
     return None
 
 def jpeg_exif_to_mtime(fn):
     "Set the file's mtime and ctime to be its timestamp and return the datetime"
     tm    = file_exif_time(fn)
+    if not tm:
+        return None
     when  = datetime.datetime.strptime(tm,"%Y:%m:%d %H:%M:%S")
     timet = when.timestamp()
     if args.dry_run:
-        print("would os.utime({},{})".format(fn,timet))
+        print("WOULD os.utime({},{})".format(fn,timet))
     else:
         os.utime(fn,(timet,timet))
     return when
@@ -60,13 +63,26 @@ def jpeg_set_exif_times(fn,date):
         p = run([cmd[0],'-mkexif'] + cmd[1:])
 
 
+def rename_file_logic(fn):
+    """Return a new filename for fn, or None if it cannot be renamed"""
+    when = jpeg_exif_to_mtime(fn)
+    if not when:
+        print(f"NO exif: {fn}")
+        return
+    nfn = os.path.dirname(fn)+"/"
+    if args.base:
+        nfn += args.base+"_"
+    nfn += when.strftime("%Y-%m-%d_%H%M%S")+".jpg"
+    return nfn
+
+
 def process_file(fn):
     exif_time_set = False
     pathdate = fix_timestamps.path_to_date(fn) 
     exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
     if pathdate:
         # Check to see if the date on the path agrees with the JPEG date...
-        print("{}: date should be {}".format(fn,pathdate))
+        print("{}: date from path should be {}".format(fn,pathdate))
         if exif==None:
             if args.info and (fn.lower().endswith(".jpg") or fn.lower().endswith(".jepg")):
                 print("   {}: NO EXIF".format(fn))
@@ -87,14 +103,16 @@ def process_file(fn):
         for (k,v) in exif.items():
             print("   {}: {}".format(k,v))
     if args.rename:
-        when = jpeg_exif_to_mtime(fn)
-        nfn = os.path.dirname(fn)+"/"+args.base+"_"+when.strftime("%Y-%m-%d_%H%M%S")+".jpg"
-        if not os.path.exists(nfn):
-            print("{} -> {}".format(fn,nfn))
-            if not args.dry_run:
-                os.rename(fn,nfn)
-        else:
-            print("{} X ({} exits)".format(fn,nfn))
+        nfn = rename_file_logic(fn)
+        if nfn:
+            if not os.path.exists(nfn):
+                if args.dry_run:
+                    print("WOULD RENAME {} -> {}".format(fn,nfn))
+                else:
+                    print("{} -> {}".format(fn,nfn))
+                    os.rename(fn,nfn)
+            else:
+                print("{} X ({} exits)".format(fn,nfn))
         
 
 if __name__=="__main__":
