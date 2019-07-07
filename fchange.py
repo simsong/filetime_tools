@@ -4,8 +4,7 @@
 """File change detector
 Creates a database of files and hashes. Optionally deletes delete dups.
 """
-
-__version__ = '0.0.1'
+__version__ = '0.1.0'
 import datetime
 import json
 import os
@@ -15,26 +14,13 @@ import sqlite3
 import sys
 
 from dbfile import DBFile, SLGSQL
-from scanner import Scanner,SQLITE3_SCHEMA
-
-CACHE_SIZE = 2000000
-SQLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
-
-"""Explanation of tables:
-files         - list of all files
-hashes       - table of all hash code
-"""
+from scanner import Scanner,SQLITE3_SCHEMA,SQLITE3_SET_CACHE,CACHE_SIZE
 
 
 ############################################################
 ############################################################
 
 # Tools for extracting from the database
-
-def list_scans(conn):
-    c = conn.cursor()
-    for (scanid, time, root) in c.execute("SELECT scanid,time,root FROM scans NATURAL JOIN roots"):
-        print(scanid, time, root)
 
 def last_scan(conn):
     return SLGSQL.execselect(conn, "SELECT MAX(scanid) FROM scans", ())[0]
@@ -51,7 +37,6 @@ def get_all_files(conn, scan1):
               "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
               "WHERE scanid=?", (scan1,))
     return (DBFile(f) for f in c)
-
 
 def get_new_files(conn, scan0, scan1):
     """Files in scan scan1 that are not in scan scan0"""
@@ -265,7 +250,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Scan a directory and report the file changes.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--db", help="Specify database location", default="data.sqlite3")
-    parser.add_argument("--list", help="List the roots and scans in the DB", action='store_true')
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
     parser.add_argument("--dups", help="Report duplicates for most recent scan", action='store_true')
@@ -273,11 +257,6 @@ if __name__ == "__main__":
     parser.add_argument("--lndups", help="Hard link dups; requires --dups", action='store_true')
     parser.add_argument("--dupsize", help="Don't report dups smaller than dupsize", default=1024 * 1024, type=int)
     parser.add_argument("--out", help="Specifies output filename")
-    parser.add_argument("--vfiles", help="Report each file as ingested",action="store_true")
-    parser.add_argument("--vdirs", help="Report each dir as ingested",action="store_true")
-    parser.add_argument("--scan", help="Scan a given directory")
-    parser.add_argument("--only_ext", help="Only this extension. Multiple extensions can be provided with commas", default='')
-    parser.add_argument("--ignore_ext", help="Ignore this extension. Multiple extensions can be provided with commas", default='')
 
     args = parser.parse_args()
 
@@ -285,14 +264,10 @@ if __name__ == "__main__":
         create_database(args.db)
         print("Created {}".format(args.db))
 
-
     # open database and give me a big cache
     conn = sqlite3.connect(args.db)
     conn.row_factory = sqlite3.Row
     conn.cursor().execute(SQLITE3_SET_CACHE)
-
-    if args.list:
-        list_scans(conn)
 
     if args.report:
         m = re.search(r"(\d+)-(\d+)", args.report)
@@ -313,9 +288,3 @@ if __name__ == "__main__":
         if args.lndups:
             raise RuntimeError("--lndups requires --dups")
 
-    if args.scan:
-        print("Scanning: {}".format(args.scan))
-        scanner = Scanner(conn)
-        scanner.ingest(args.scan, verbose_dirs=args.vdirs, verbose_files=args.vfiles,
-                       ignore_ext=args.ignore_ext.split(","),
-                       only_ext=args.only_ext.split(","))

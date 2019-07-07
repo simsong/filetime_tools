@@ -5,6 +5,15 @@
 ############################################################
 ############################################################
 
+__version__ = '0.1.0'
+import os
+import sys
+import zipfile
+import time
+from dbfile import DBFile, SLGSQL
+import sqlite3
+
+
 
 # SQLite3 schema
 SQLITE3_SCHEMA = \
@@ -54,12 +63,8 @@ CREATE INDEX IF NOT EXISTS files_idx6 ON files(scanid,hashid);
 
 """
 
-import os
-import sys
-import zipfile
-import time
-from dbfile import DBFile, SLGSQL
-
+CACHE_SIZE = 2000000
+SQLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
 
 COMMIT_RATE = 10  # commit every 10 directories
 
@@ -238,6 +243,52 @@ class Scanner(object):
         print("Total time: {}".format(int(t1 - t0)))
 
 
+def get_file_for_hash(conn, hash):
+    c = conn.cursor()
+    c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename, fileid, mtime, size "
+              "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+              "WHERE hashid=(select hashid from hashes where hash=?)", (hash,))
+    return (DBFile(f) for f in c)
+    
+
+
+
 ###################### END OF SCANNER CLASS ######################
 ##################################################################
 
+def list_scans(conn):
+    c = conn.cursor()
+    for (scanid, time, root) in c.execute("SELECT scans.scanid, scans.time, dirnames.dirname FROM scans LEFT JOIN roots on scans.scanid=roots.rootid LEFT JOIN dirnames on roots.dirnameid=dirnames.dirnameid;"):
+        print(scanid, time, root)
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='Scan a directory and report the file changes.',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--db", help="Specify database location", default="data.sqlite3")
+    parser.add_argument("--list", help="List the roots and scans in the DB", action='store_true')
+    parser.add_argument("--vfiles", help="Report each file as ingested",action="store_true")
+    parser.add_argument("--vdirs", help="Report each dir as ingested",action="store_true")
+    parser.add_argument("--scan", help="Scan a given directory")
+    parser.add_argument("--only_ext", help="Only this extension. Multiple extensions can be provided with commas", default='')
+    parser.add_argument("--ignore_ext", help="Ignore this extension. Multiple extensions can be provided with commas", default='')
+
+    args = parser.parse_args()
+    if not os.path.exists(args.db):
+        create_database(args.db)
+        print("Created {}".format(args.db))
+
+    # open database and give me a big cache
+    conn = sqlite3.connect(args.db)
+    conn.row_factory = sqlite3.Row
+    conn.cursor().execute(SQLITE3_SET_CACHE)
+
+    if args.list:
+        list_scans(conn)
+
+    if args.scan:
+        print("Scanning: {}".format(args.scan))
+        scanner = Scanner(conn)
+        scanner.ingest(args.scan, verbose_dirs=args.vdirs, verbose_files=args.vfiles,
+                       ignore_ext=args.ignore_ext.split(","),
+                       only_ext=args.only_ext.split(","))

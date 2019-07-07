@@ -3,6 +3,8 @@
 #
 
 import datetime
+import os
+import os.path
 
 class SLGSQL:
     def iso_now():
@@ -35,9 +37,15 @@ class DBFile:
     def __repr__(self):
         return "File<" + ",".join(["{}:{}".format(name, getattr(self, name)) for name in self.__slots__]) + ">"
 
-    def get_path(self, conn):
+    def get_path(self, conn=None):
         """Return the full pathname. May need an SQL connection to answer question"""
-        return self.get_dirname(conn) + "/" + self.get_filename(conn)
+        if self.dirname is None:
+            self.get_dirname(conn)
+        
+        if self.filename is None:
+            self.get_filename(conn)
+        
+        return os.path.join(self.dirname,  self.filename)
 
     def cache_pathid(self, conn):
         if (self.dirname == None and self.dirnameid == None) or \
