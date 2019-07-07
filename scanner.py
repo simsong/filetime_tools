@@ -6,6 +6,54 @@
 ############################################################
 
 
+# SQLite3 schema
+SQLITE3_SCHEMA = \
+    """
+CREATE TABLE IF NOT EXISTS metadata (key VARCHAR(255) PRIMARY KEY,value VARCHAR(255) NOT NULL);
+
+CREATE TABLE IF NOT EXISTS dirnames (dirnameid INTEGER PRIMARY KEY,dirname TEXT NOT NULL UNIQUE);
+CREATE INDEX IF NOT EXISTS dirnames_idx1 ON dirnames(dirnameid);
+CREATE INDEX IF NOT EXISTS dirnames_idx2 ON dirnames(dirname);
+
+CREATE TABLE IF NOT EXISTS filenames (filenameid INTEGER PRIMARY KEY,filename TEXT NOT NULL UNIQUE);
+CREATE INDEX IF NOT EXISTS filenames_idx1 ON filenames(filenameid);
+CREATE INDEX IF NOT EXISTS filenames_idx2 ON filenames(filename);
+
+CREATE TABLE IF NOT EXISTS paths (pathid INTEGER PRIMARY KEY,dirnameid INTEGER REFERENCES dirnames(dirnameid), filenameid INTEGER REFERENCES filenames(filenameid));
+CREATE INDEX IF NOT EXISTS paths_idx1 ON paths(pathid);
+CREATE INDEX IF NOT EXISTS paths_idx2 ON paths(dirnameid);
+CREATE INDEX IF NOT EXISTS paths_idx3 ON paths(filenameid);
+
+CREATE TABLE IF NOT EXISTS hashes (hashid INTEGER PRIMARY KEY,hash TEXT NOT NULL UNIQUE);
+CREATE INDEX IF NOT EXISTS hashes_idx1 ON hashes(hashid);
+CREATE INDEX IF NOT EXISTS hashes_idx2 ON hashes(hash);
+
+CREATE TABLE IF NOT EXISTS scans (scanid INTEGER PRIMARY KEY,time DATETIME NOT NULL UNIQUE,duration INTEGER);
+CREATE INDEX IF NOT EXISTS scans_idx1 ON scans(scanid);
+CREATE INDEX IF NOT EXISTS scans_idx2 ON scans(time);
+
+CREATE TABLE IF NOT EXISTS roots (rootid INTEGER PRIMARY KEY,scanid INT REFERENCES scans(scanid), dirnameid INT REFERENCES dirnames(dirnameid));
+CREATE INDEX IF NOT EXISTS roots_idx1 ON roots(rootid);
+CREATE INDEX IF NOT EXISTS roots_idx2 ON roots(scanid);
+CREATE INDEX IF NOT EXISTS roots_idx3 ON roots(dirnameid);
+
+CREATE TABLE IF NOT EXISTS files (fileid INTEGER PRIMARY KEY,
+                                  pathid INTEGER REFERENCES paths(pathid),
+                                  mtime INTEGER NOT NULL, 
+                                  size INTEGER NOT NULL, 
+                                  hashid INTEGER REFERENCES hashes(hashid), 
+                                  scanid INTEGER REFERENCES scans(scanid));
+CREATE INDEX IF NOT EXISTS files_idx0 ON files(fileid);
+CREATE INDEX IF NOT EXISTS files_idx1 ON files(pathid);
+CREATE INDEX IF NOT EXISTS files_idx2 ON files(mtime);
+CREATE INDEX IF NOT EXISTS files_idx3 ON files(size);
+CREATE INDEX IF NOT EXISTS files_idx4 ON files(hashid);
+CREATE INDEX IF NOT EXISTS files_idx5 ON files(scanid);
+CREATE INDEX IF NOT EXISTS files_idx6 ON files(scanid,hashid);
+
+
+"""
+
 import os
 import sys
 import zipfile
@@ -42,32 +90,30 @@ def open_zipfile(path):
 
 class Scanner(object):
     """Class to scan a directory and store the results in the database."""
-    def __init__(self, conn, args):
+    def __init__(self, conn):
         self.conn = conn
         self.c = self.conn.cursor()
-        self.args = args
 
     def get_hashid(self, hash):
         self.c.execute("INSERT or IGNORE INTO hashes (hash) VALUES (?);", (hash,))
         self.c.execute("SELECT hashid FROM hashes WHERE hash=?", (hash,))
         return self.c.fetchone()[0]
 
-    def get_scanid(self, now):
-        self.c.execute("INSERT or IGNORE INTO scans (time) VALUES (?);", (now,))
-        self.c.execute("SELECT scanid FROM scans WHERE time=?", (now,))
+    def get_dirnameid(self, dirname):
+        self.c.execute("INSERT or IGNORE INTO dirnames (dirname) VALUES (?);", (dirname,))
+        self.c.execute("SELECT dirnameid FROM dirnames WHERE dirname=?", (dirname,))
+        return self.c.fetchone()[0]
+
+    def get_filenameid(self, filename):
+        assert "/" not in filename
+        self.c.execute("INSERT or IGNORE INTO filenames (filename) VALUES (?);", (filename,))
+        self.c.execute("SELECT filenameid FROM filenames WHERE filename=?", (filename,))
         return self.c.fetchone()[0]
 
     def get_pathid(self, path):
         (dirname, filename) = os.path.split(path)
-        # dirname
-        self.c.execute("INSERT or IGNORE INTO dirnames (dirname) VALUES (?);", (dirname,))
-        self.c.execute("SELECT dirnameid FROM dirnames WHERE dirname=?", (dirname,))
-        dirnameid = self.c.fetchone()[0]
-
-        # filename
-        self.c.execute("INSERT or IGNORE INTO filenames (filename) VALUES (?);", (filename,))
-        self.c.execute("SELECT filenameid FROM filenames WHERE filename=?", (filename,))
-        filenameid = self.c.fetchone()[0]
+        dirnameid = self.get_dirnameid(dirname)
+        filenameid = self.get_filenameid(filename)
 
         # pathid
         self.c.execute("INSERT or IGNORE INTO paths (dirnameid,filenameid) VALUES (?,?);",
@@ -76,8 +122,21 @@ class Scanner(object):
                        (dirnameid, filenameid,))
         return self.c.fetchone()[0]
 
+    def get_scanid(self, now, root):
+        dirnameid = self.get_dirnameid(root)
+        self.c.execute("INSERT or IGNORE INTO scans (time) VALUES (?);", (now,))
+        self.c.execute("SELECT scanid FROM scans WHERE time=?", (now,))
+        scanid = self.c.fetchone()[0]
+        self.c.execute("INSERT INTO roots (scanid,dirnameid) values (?,?)",(scanid,dirnameid))
+        self.conn.commit()
+        return scanid
+
     def insert_file(self, path, mtime, file_size, handle, scanid):
         """@mtime in time_t"""
+
+        if self.verbose_files:
+            print("insert_file({})".format(path))
+
         pathid = self.get_pathid(path)
 
         # See if this file with this length is in the database.
@@ -94,13 +153,12 @@ class Scanner(object):
                 hashid = self.get_hashid(hash_file(handle))
             self.c.execute("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (?,?,?,?,?)",
                            (pathid, mtime, file_size, hashid, scanid))
-            if self.args.vfiles:
+            if self.verbose_files:
                 print("{} {}".format(path, file_size))
         except PermissionError as e:
             pass
         except OSError as e:
             pass
-
 
     def process_filepath(self, scanid, path):
         """ Add the file to the database database.
@@ -119,21 +177,43 @@ class Scanner(object):
             mtime = time.mktime(zi.date_time + (0,0,0))
             self.insert_file(path+"/"+zi.filename, mtime, zi.file_size,zf.open(zi.filename,"r"), scanid)
 
-    def ingest(self, root):
+    def ingest(self, root, ignore_ext=[], only_ext=[], verbose_dirs=False, verbose_files=False):
         """Ingest everything from the root"""
+
+        self.verbose_dirs = verbose_dirs
+        self.verbose_files = verbose_files
+        print("verbose_files=",verbose_files)
+
+        if not os.path.exists(root):
+            raise FileNotFoundError(root)
+        if not os.path.isdir(root):
+            raise FileNotFoundError("{} is not a directory".format(root))
+
+        only_ext_lower   = [ext.lower() for ext in only_ext]
+        ignore_ext_lower = [ext.lower() for ext in ignore_ext]
 
         self.c = self.conn.cursor()
         self.c.execute("BEGIN TRANSACTION")
 
-        scanid = self.get_scanid(SLGSQL.iso_now())
+        scanid = self.get_scanid(SLGSQL.iso_now(),root)
 
         count = 0
         dircount = 0
         t0 = time.time()
         for (dirpath, dirnames, filenames) in os.walk(root):
-            if self.args.vdirs:
-                print("{}".format(dirpath), end='\n' if self.args.vfiles else '')
+            if verbose_dirs or verbose_files:
+                print("scanning {}".format(dirpath))
             for filename in filenames:
+                filename_lower = filename.lower()
+                if only_ext!=[''] and not any([filename_lower.endswith(ext) for ext in only_ext_lower]):
+                    if verbose_files:
+                        print("Will not include {} (not in only_ext)".format(filename))
+                    continue
+                if ignore_ext_lower!=[''] and any([filename_lower.endswith(ext) for ext in ignore_ext_lower]):
+                    if verbose_files:
+                        print("Will not include {} (in {})".format(filename,ignore_ext_lower))
+                    continue
+
                 path = os.path.join(dirpath, filename)
                 if not os.path.isfile(path):
                     continue
@@ -142,8 +222,8 @@ class Scanner(object):
                 if zf:
                     self.process_zipfile(scanid,path, zf)
 
-            if self.args.vdirs:
-                print("\r{}:  {}".format(dirpath,len(filenames)))
+            if verbose_dirs:
+                print("\r{}: scanned {} files".format(dirpath,len(filenames)))
             count += len(filenames)
             dircount += 1
             if dircount % COMMIT_RATE == 0:
@@ -152,6 +232,7 @@ class Scanner(object):
         self.conn.commit()
         t1 = time.time()
         self.c.execute("UPDATE scans SET duration=? WHERE scanid=?", (t1 - t0, scanid))
+        self.conn.commit()
         print("Total files added to database: {}".format(count))
         print("Total directories scanned:     {}".format(dircount))
         print("Total time: {}".format(int(t1 - t0)))

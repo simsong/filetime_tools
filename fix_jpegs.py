@@ -9,10 +9,11 @@ import time
 import re
 
 import fix_timestamps
+import subprocess
 
 EXIF_TIME_TAGSET = ['DateTime','DateTimeDigitized','DateTimeOriginal']
 
-def file_exif(fn,tagset=PIL.ExifTags.TAGS.values()):
+def file_exif(fn,tagset=PIL.ExifTags.TAGS.values(), allexif=False):
     """Return a dictionary of the the EXIF properties.
     @param fn - filename of JPEG file
     @param tagset - a set of the exif tag names that are requested (default is all)
@@ -25,88 +26,107 @@ def file_exif(fn,tagset=PIL.ExifTags.TAGS.values()):
 
     # in the loop below, k is the numberic key of the exif attribute, e.g. 271
     #                    v is the value of the exif attribute e.g. "Apple"
+    if allexif:
+        exif = {PIL.ExifTags.TAGS[k]: v for k, v in img._getexif().items() if k in PIL.ExifTags.TAGS }
+        return exif
+
     exif = {PIL.ExifTags.TAGS[k]: v for k, v in img._getexif().items() 
             if k in PIL.ExifTags.TAGS and PIL.ExifTags.TAGS[k] in tagset}
     return exif
 
-def file_exif_time(fn):
-    """Return the tags that have to do with date"""
-    exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
+def file_exif_time(fn, allexif=False):
+    """Return the datetime for the tags that have to do with date"""
+    exif = file_exif(fn, tagset=EXIF_TIME_TAGSET, allexif=allexif)
     if exif:
         for tag in EXIF_TIME_TAGSET:
             if (tag in exif) and (exif[tag]):
-                return exif[tag]
+                return datetime.datetime.strptime(exif[tag],"%Y:%m:%d %H:%M:%S")
     return None
 
-def jpeg_exif_to_mtime(fn):
-    "Set the file's mtime and ctime to be its timestamp and return the datetime"
-    tm    = file_exif_time(fn)
-    if not tm:
-        return None
-    when  = datetime.datetime.strptime(tm,"%Y:%m:%d %H:%M:%S")
-    timet = when.timestamp()
-    if args.dry_run:
-        print("WOULD os.utime({},{})".format(fn,timet))
-    else:
-        os.utime(fn,(timet,timet))
-    return when
-
 def jpeg_set_exif_times(fn,date):
-    from subprocess import run,PIPE
     cmd = ['jhead','-ds{}:{:02}:{:02}'.format(date.year,date.month,date.day), fn]
     if args.dry_run:
         print("DRY RUN: "+" ".join(cmd))
         return
-    p = run(cmd,stdout=PIPE,encoding='utf-8')
-    if "contains no Exif timestamp to change" in p.stdout:
+    out = subprocess.check_output(cmd,encoding='utf-8')
+    if "contains no Exif timestamp to change" in out:
         print("adding exif")
-        p = run([cmd[0],'-mkexif'] + cmd[1:])
+        subprocess.run([cmd[0],'-mkexif'] + cmd[1:], check=True)
 
 
-def rename_file_logic(fn):
+def rename_file_logic(fn, base):
     """Return a new filename for fn, or None if it cannot be renamed"""
-    when = jpeg_exif_to_mtime(fn)
+    when = file_exif_time(fn)
+    print(fn,when,type(when))
     if not when:
         print(f"NO exif: {fn}")
-        return
+        return None
     nfn = os.path.dirname(fn)+"/"
-    if args.base:
-        nfn += args.base+"_"
+    if base:
+        nfn += base+"_"
     nfn += when.strftime("%Y-%m-%d_%H%M%S")+".jpg"
     return nfn
 
 
-def process_file(fn):
+def process_file(fn, dry_run=False, allexif=False):
     exif_time_set = False
     pathdate = fix_timestamps.path_to_date(fn) 
-    exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
-    if pathdate:
-        # Check to see if the date on the path agrees with the JPEG date...
-        print("{}: date from path should be {}".format(fn,pathdate))
+    exif     = file_exif(fn, tagset=EXIF_TIME_TAGSET, allexif=allexif)
+
+    if exif and args.dump:
+        print(f"{fn}:")
+        for k,v in exif.items():
+            print(f"  {k}  {v}")
+
+    if pathdate or args.year:
+        if not pathdate and args.year:
+            pathdate = datetime.datetime(year=args.year,month=1,day=1,hour=0,minute=0,second=0)
+
+        # If there is a date in the path, make sure that the date in the EXIF agrees.
         if exif==None:
+            # No exif. If this is a jpeg file, give it an exif
             if args.info and (fn.lower().endswith(".jpg") or fn.lower().endswith(".jepg")):
-                print("   {}: NO EXIF".format(fn))
+                print("   {}: CREATING EXIF".format(fn))
             jpeg_set_exif_times(fn,pathdate)
-            return
-        exiftime = file_exif_time(fn)
-        if exiftime==None:
+        exif_time = file_exif_time(fn)
+        if exif_time==None:
             if args.info:
-                print("   {}: NO EXIF DATE".format(fn))
+                print("   {}: CREATING EXIF DATE".format(fn))
             jpeg_set_exif_times(fn,pathdate)
             exif_time_set = True
-    if not exif:
-        exif = file_exif(fn, tagset=EXIF_TIME_TAGSET)
-    if not exif:
-        return
-    if args.info and not exif_time_set:
-        print("{}:".format(fn))
-        for (k,v) in exif.items():
-            print("   {}: {}".format(k,v))
+            
+    # If we were asked to dump the exif, do so
+    if args.info:
+        if not exif:
+            exif = file_exif(fn, tagset=EXIF_TIME_TAGSET, allexif=allexif)
+            print("{}:".format(fn))
+            for (k,v) in exif.items():
+                print("   {}: {}".format(k,v))
+
+    # If we were asked to set time utimes, do so
+    exif_time  = file_exif_time(fn)
+    print("file_exif_time({})={}".format(fn,exif_time))
+    if exif_time and args.year:
+        exif_time = exif_time.replace(year=args.year)
+        jpeg_set_exif_times(fn,exif_time)
+                
+
+    if exif_time:
+        timet = exif_time.timestamp()
+        st    = os.stat(fn)
+        if st.st_mtime != timet:
+            if dry_run:
+                print("WOULD os.utime({},{})  (from {})".format(fn,timet,st.st_mtime))
+                print("   {} = {}".format(timet,time.asctime(time.localtime(timet))))
+            else:
+                os.utime(fn,(timet,timet))
+
+    # If we were asked to rename the files, do so
     if args.rename:
-        nfn = rename_file_logic(fn)
+        nfn = rename_file_logic(fn, args.base)
         if nfn:
             if not os.path.exists(nfn):
-                if args.dry_run:
+                if dry_run:
                     print("WOULD RENAME {} -> {}".format(fn,nfn))
                 else:
                     print("{} -> {}".format(fn,nfn))
@@ -114,6 +134,14 @@ def process_file(fn):
             else:
                 print("{} X ({} exits)".format(fn,nfn))
         
+    if args.txt:
+        txtfname = os.path.splitext(fn)[0] + ".txt"
+        if os.path.exists(txtfname):
+            print("Combining {} and {}".format(fn,txtfname))
+            comment = open(txtfname).read().strip()
+            check_call(['exiftool','-Comment='+comment,fn])
+            os.unlink(txtfname)
+            
 
 if __name__=="__main__":
     import argparse
@@ -128,13 +156,18 @@ if __name__=="__main__":
     parser.add_argument("--base", help="string to prepend to each filename", default='')
     parser.add_argument("--info", help="Just print exif info for each image", action='store_true')
     parser.add_argument("--verbose", help="print lots of stuff")
+    parser.add_argument("--txt",  help="If there is a filename.txt that matches filename.jpg, put the .txt's contents into the jpg as exif comments, and then delete the .txt", action='store_true')
+    parser.add_argument("--rmdupcolor", help="Look for all JPEGs that have the same *name* in different directories. Delete the duplicate name if the two have different color profiles and if one has color profile XXX", action='store_true')
+    parser.add_argument("--dump", action='store_true', help='dump EXIF for every file')
+    parser.add_argument("--allexif", help='use all Exif tags', action='store_true')
     parser.add_argument("files", help="files or directories to check/modify", nargs="+")
+    parser.add_argument("--year", type=int, help="If provided, for EXIFs to this year")
     
     args = parser.parse_args()
 
     for fn in args.files:
         if os.path.isfile(fn):
-            process_file(fn)
+            process_file(fn, args.dry_run, allexif=args.allexif)
         if os.path.isdir(fn):
              for (dirpath, dirnames, filenames) in os.walk(fn):
                  for filename in filenames:

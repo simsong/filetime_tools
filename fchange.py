@@ -15,51 +15,10 @@ import sqlite3
 import sys
 
 from dbfile import DBFile, SLGSQL
-from scanner import Scanner
+from scanner import Scanner,SQLITE3_SCHEMA
 
 CACHE_SIZE = 2000000
-SQL_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
-
-# Replace this with an ORM?
-SQL_SCHEMA = \
-    """
-CREATE TABLE IF NOT EXISTS metadata (key VARCHAR(255) PRIMARY KEY,value VARCHAR(255) NOT NULL);
-
-CREATE TABLE IF NOT EXISTS files (fileid INTEGER PRIMARY KEY,
-                                  pathid INTEGER NOT NULL,
-                                  mtime INTEGER NOT NULL, 
-                                  size INTEGER NOT NULL, 
-                                  hashid INTEGER NOT NULL, 
-                                  scanid INTEGER NOT NULL);
-CREATE INDEX IF NOT EXISTS files_idx0 ON files(fileid);
-CREATE INDEX IF NOT EXISTS files_idx1 ON files(pathid);
-CREATE INDEX IF NOT EXISTS files_idx2 ON files(mtime);
-CREATE INDEX IF NOT EXISTS files_idx3 ON files(size);
-CREATE INDEX IF NOT EXISTS files_idx4 ON files(hashid);
-CREATE INDEX IF NOT EXISTS files_idx5 ON files(scanid);
-CREATE INDEX IF NOT EXISTS files_idx6 ON files(scanid,hashid);
-
-CREATE TABLE IF NOT EXISTS paths (pathid INTEGER PRIMARY KEY,dirnameid INTEGER NOT NULL, filenameid INTEGER NOT NULL);
-CREATE INDEX IF NOT EXISTS paths_idx1 ON paths(pathid);
-CREATE INDEX IF NOT EXISTS paths_idx2 ON paths(dirnameid);
-CREATE INDEX IF NOT EXISTS paths_idx3 ON paths(filenameid);
-
-CREATE TABLE IF NOT EXISTS dirnames (dirnameid INTEGER PRIMARY KEY,dirname TEXT NOT NULL UNIQUE);
-CREATE INDEX IF NOT EXISTS dirnames_idx1 ON dirnames(dirnameid);
-CREATE INDEX IF NOT EXISTS dirnames_idx2 ON dirnames(dirname);
-
-CREATE TABLE IF NOT EXISTS filenames (filenameid INTEGER PRIMARY KEY,filename TEXT NOT NULL UNIQUE);
-CREATE INDEX IF NOT EXISTS filenames_idx1 ON filenames(filenameid);
-CREATE INDEX IF NOT EXISTS filenames_idx2 ON filenames(filename);
-
-CREATE TABLE IF NOT EXISTS hashes (hashid INTEGER PRIMARY KEY,hash TEXT NOT NULL UNIQUE);
-CREATE INDEX IF NOT EXISTS hashes_idx1 ON hashes(hashid);
-CREATE INDEX IF NOT EXISTS hashes_idx2 ON hashes(hash);
-
-CREATE TABLE IF NOT EXISTS scans (scanid INTEGER PRIMARY KEY,time DATETIME NOT NULL UNIQUE,duration INTEGER);
-CREATE INDEX IF NOT EXISTS scans_idx1 ON scans(scanid);
-CREATE INDEX IF NOT EXISTS scans_idx2 ON scans(time);
-"""
+SQLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
 
 """Explanation of tables:
 files         - list of all files
@@ -74,8 +33,8 @@ hashes       - table of all hash code
 
 def list_scans(conn):
     c = conn.cursor()
-    for (scanid, time) in c.execute("SELECT scanid,time FROM scans"):
-        print(scanid, time)
+    for (scanid, time, root) in c.execute("SELECT scanid,time,root FROM scans NATURAL JOIN roots"):
+        print(scanid, time, root)
 
 def last_scan(conn):
     return SLGSQL.execselect(conn, "SELECT MAX(scanid) FROM scans", ())[0]
@@ -291,29 +250,22 @@ def jreport(conn):
         dump_dictionary(fp, "fileids", fileids)
 
 
-def get_root(conn):
-    return SLGSQL.execselect(conn, "SELECT value FROM metadata WHERE key='root'")[0]
-
-
-def create_database(name, root):
+def create_database(name):
     if os.path.exists(name):
         print("file exists: {}".format(name))
         exit(1)
     conn = sqlite3.connect(name)
-    SLGSQL.create_schema(SQL_SCHEMA, conn)
-    conn.cursor().execute("INSERT INTO metadata (key, value) VALUES (?,?)", ("root", root))
+    SLGSQL.create_schema(SQLITE3_SCHEMA, conn)
     conn.commit()
     conn.close()
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='Scan a directory and report the file changes. Currently works for a single root',
+    parser = argparse.ArgumentParser(description='Scan a directory and report the file changes.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--create", help="Create a database for a given ROOT")
     parser.add_argument("--db", help="Specify database location", default="data.sqlite3")
-    parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
-    parser.add_argument("--root", help="List the root in the DB", action='store_true')
+    parser.add_argument("--list", help="List the roots and scans in the DB", action='store_true')
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
     parser.add_argument("--dups", help="Report duplicates for most recent scan", action='store_true')
@@ -323,28 +275,27 @@ if __name__ == "__main__":
     parser.add_argument("--out", help="Specifies output filename")
     parser.add_argument("--vfiles", help="Report each file as ingested",action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested",action="store_true")
-    parser.add_argument("--scan", help="Do a scan (no longer default)", action='store_true')
+    parser.add_argument("--scan", help="Scan a given directory")
+    parser.add_argument("--only_ext", help="Only this extension. Multiple extensions can be provided with commas", default='')
+    parser.add_argument("--ignore_ext", help="Ignore this extension. Multiple extensions can be provided with commas", default='')
 
     args = parser.parse_args()
 
-    if args.create:
-        create_database(args.db, args.create)
-        print("Created {}  root: {}".format(args.db, args.create))
+    if not os.path.exists(args.db):
+        create_database(args.db)
+        print("Created {}".format(args.db))
 
-    if args.scans:
-        list_scans(sqlite3.connect(args.db))
 
     # open database and give me a big cache
     conn = sqlite3.connect(args.db)
     conn.row_factory = sqlite3.Row
-    conn.cursor().execute(SQL_SET_CACHE)
+    conn.cursor().execute(SQLITE3_SET_CACHE)
 
-    if args.root:
-        c = conn.cursor()
-        print("Root: {}".format(get_root(conn)))
+    if args.list:
+        list_scans(conn)
 
     if args.report:
-        m = re.search("(\d+)-(\d+)", args.report)
+        m = re.search(r"(\d+)-(\d+)", args.report)
         if not m:
             print("Usage: --report N-M")
             exit(1)
@@ -353,16 +304,18 @@ if __name__ == "__main__":
     if args.jreport:
         jreport(conn)
 
-    if args.rmdups and not args.dups:
-        raise RuntimeError("--rmdups requires --dups")
-
-    if args.lndups and not args.dups:
-        raise RuntimeError("--lndups requires --dups")
-
     if args.dups:
         report_dups(conn, last_scan(conn), rmdups=args.rmdups, lndups=args.lndups)
+    else:
+        if args.rmdups:
+            raise RuntimeError("--rmdups requires --dups")
+
+        if args.lndups:
+            raise RuntimeError("--lndups requires --dups")
 
     if args.scan:
-        root = get_root(conn)
-        print("Scanning: {}".format(root))
-        Scanner(conn,args).ingest(root)
+        print("Scanning: {}".format(args.scan))
+        scanner = Scanner(conn)
+        scanner.ingest(args.scan, verbose_dirs=args.vdirs, verbose_files=args.vfiles,
+                       ignore_ext=args.ignore_ext.split(","),
+                       only_ext=args.only_ext.split(","))

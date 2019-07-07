@@ -312,7 +312,7 @@ class DragWindow(QWidget):
 
 if __name__=="__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='Seek out and rename MDY timestamps',
+    parser = argparse.ArgumentParser(description='Seek out and rename MDY timestamps to be YYYY-MM-DD. Can run from the command line or with a GUI.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--drag",    action="store_true")
     parser.add_argument("--gui",     action='store_true')
