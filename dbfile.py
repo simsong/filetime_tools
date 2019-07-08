@@ -5,6 +5,7 @@
 import datetime
 import os
 import os.path
+import base64
 
 class SLGSQL:
     def iso_now():
@@ -74,4 +75,10 @@ class DBFile:
             self.dirname = c.fetchone()[0]
         return self.dirname
 
+    def get_data(self, conn):
+        """Returns the data in the file"""
+        with open(self.get_path(), 'rb') as f:
+            return f.read()
 
+    def get_data_base64str(self, conn):
+        return base64.b64encode(self.get_data(conn)).decode('utf-8','ignore')
