@@ -161,9 +161,7 @@ $downloadingImage.attr("src", first);
 function DisplayRandomImage() {
     $.getJSON(cgi + '?action=random', function(data){
         hash = data['random'];
-        console.log("DisplayRandomImage code=",hash);
         $.getJSON(cgi + '?action=get&hash=' + hash, function(d2) {
-            console.log("got image; displaying");
             $image.attr("src", "data:text/css;base64," + d2['image_base64'])
         });
     });
@@ -181,6 +179,18 @@ function DisplayRandomRuns() {
 var delay_seconds = 5;
 setInterval(DisplayRandomImage, delay_seconds * 1000);
 
+$(document).keydown( function (e) {
+    switch (e.key) {
+    case 'ArrowLeft':
+        console.log('left!');
+        break;
+    case 'ArrowRight':
+        console.log('right!');
+        break;
+    default:
+        console.log("unknown: ",e.key);
+    }
+});
 
 
 </script>
