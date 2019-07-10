@@ -7,12 +7,17 @@
 
 import sys
 import cgi
-import scanner
 import sqlite3
 import json
 import base64
+import os
+import subprocess
 
-IMAGES_DB='images.db'
+sys.path.append( os.path.join(os.path.dirname(__file__),'..'))
+
+import scanner
+
+IMAGES_DB='/Users/simsong/images.db'
 
 def get_random(conn):
     """Return a random JPEG from the most recent scan. Note this uses order by random, which is slow, but it works for now."""
@@ -21,13 +26,17 @@ def get_random(conn):
     c.execute("select hash from hashes where hashid = (select hashid from files where scanid=(select max(scanid) from scans) order by random())")
     return c.fetchone()[0]
     
-def get_objects(conn,hash):
-    """Returns the object specified by hash"""
+def get_random_run(conn):
+    """Return a random JPEG from the most recent scan. Note this uses order by random, which is slow, but it works for now."""
     c = conn.cursor()
+    c.execute("select hash from hashes where hashid in (select hashid from files where scanid=(select max(scanid) from scans) order by random() limit 100)")
+    return [hash for hash in c.fetchall()]
+    
+def get_objects_for_hash(conn,hash):
+    """Returns all the objects with a specific by hash"""
     return scanner.get_file_for_hash(conn,hash)
     
 def respond(res):
-    print("Content-type: text/plain\r\n\r\n")
     print(json.dumps(res),flush=True)
     exit(0)
 
@@ -40,17 +49,30 @@ def do_action(form):
     if action=='random':
         res = {'random':get_random(conn)}
         respond(res)
+    if action=='random_run':
+        res = {'random_run':get_random_run(conn)}
+        respond(res)
+    # get an image
     if action=='get':
         hash = form['hash'].value
-        for obj in get_objects(conn,hash):
+        for obj in get_objects_for_hash(conn,hash):
             res = {'image_base64':obj.get_data_base64str(conn)}
             respond(res)
     respond({})
 
-if __name__ == "__main__":
+def do_cgi():
+    print("Content-type: text/plain\r\n\r\n",flush=True)
     form = cgi.FieldStorage()
     if 'action' in form:
         do_action(form)
+    print("valid actions: random, random_run, get",flush=True)
+    print("os.getuid=",os.getuid(),flush=True)
+    subprocess.check_call(['printenv'])
+    exit(0)
+    
+if __name__ == "__main__":
+    if 'REQUEST_METHOD' in os.environ:
+        do_cgi()
 
     import argparse
     parser = argparse.ArgumentParser(description='Test routines for the screensaver.',
@@ -78,3 +100,4 @@ if __name__ == "__main__":
             with open(obj.get_path(),'rb') as f:
                 sys.stdout.buffer.write(f.read())
             break
+

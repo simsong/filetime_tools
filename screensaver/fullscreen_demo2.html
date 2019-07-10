@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>HTML5 Full-Screen Demonstration</title>
+<style>
+* {
+	padding: 0;
+	margin: 0;
+}
+
+html, body {
+	height: 100%;
+	font-family: "Segoe UI", arial, helvetica, freesans, sans-serif;
+	color: #333;
+	background-color: #fff;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+body {
+	margin: 10px;
+}
+
+p {
+	margin: 0 0 1em 0;
+}
+
+section {
+	display: block;
+	float: right;
+	width: 40%;
+	padding: 10px;
+	margin: 0;
+	border: 2px solid #ddd;
+	cursor: pointer;
+}
+
+section img {
+	width: 100%;
+}
+
+section p {
+	font-weight: bold;
+	text-align: center;
+	margin: 0;
+}
+
+section:-webkit-full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+	background-color: #f00;
+}
+
+section:-moz-full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+}
+
+section:-ms-full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+}
+
+section:-o-full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+}
+
+section:full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+}
+</style>
+</head>
+<body>
+
+<header>
+<h1>HTML5 Full-Screen Demonstration</h1>
+</header>
+
+<article>
+<section id="fullscreen">
+<img src="squirrel.jpg" alt="a squirrel" />
+<p>Oh look &ndash; a squirrel. Click to view full-screen&hellip;</p>
+</section>
+
+<p>This demonstration illustrates how to use the HTML5 full-screen API which has been implemented in Firefox, Chrome and Safari.</p>
+
+<p>For further information, please refer to the article <a href="http://www.sitepoint.com/html5-full-screen-api/"><strong>How to Use the HTML5 Full-Screen API</strong></a>&hellip;</p>
+
+<p>This example code was developed by <a href="http://twitter.com/craigbuckler">Craig Buckler</a> of <a href="http://optimalworks.net/">OptimalWorks.net</a> for <a href="http://sitepoint.com/">SitePoint.com</a>.</p>
+
+<p>Please view the source and use this code as you wish. A link back to the article is appreciated.</p>
+
+</article>
+
+<script>
+var e = document.getElementById("fullscreen");
+
+e.onclick = function() {
+
+	if (RunPrefixMethod(document, "FullScreen") || RunPrefixMethod(document, "IsFullScreen")) {
+		RunPrefixMethod(document, "CancelFullScreen");
+	}
+	else {
+		RunPrefixMethod(e, "RequestFullScreen");
+	}
+
+}
+
+var pfx = ["webkit", "moz", "ms", "o", ""];
+function RunPrefixMethod(obj, method) {
+	
+	var p = 0, m, t;
+	while (p < pfx.length && !obj[m]) {
+		m = method;
+		if (pfx[p] == "") {
+			m = m.substr(0,1).toLowerCase() + m.substr(1);
+		}
+		m = pfx[p] + m;
+		t = typeof obj[m];
+		if (t != "undefined") {
+			pfx = [pfx[p]];
+			return (t == "function" ? obj[m]() : obj[m]);
+		}
+		p++;
+	}
+
+}
+
+</script>
+
+</body>
+</html>

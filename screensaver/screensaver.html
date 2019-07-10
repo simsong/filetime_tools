@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<title>HTML5 Screen Saver</title>
+<style>
+* {
+	padding: 0;
+	margin: 0;
+}
+
+html, body {
+	height: 100%;
+	font-family: "Segoe UI", arial, helvetica, freesans, sans-serif;
+	color: #333;
+	background-color: #fff;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+body { margin: 10px; }
+p { margin: 0 0 1em 0; }
+section {
+	display: block;
+	float: left;
+	width: 40%;
+	padding: 10px;
+	margin: 0;
+	border: 2px solid #ddd;
+	cursor: pointer;
+}
+section img {
+    width: 100%;
+    background: url(loading.gif) 50% no-repeat;
+    border: 1px solid black;
+    border-radius: 5px;
+    image-rotation: from-image;
+}
+section p {
+        font-weight: bold;
+	text-align: center;
+	margin: 0;
+}
+
+section:-webkit-full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+	background-color: #f00;
+}
+
+section:-moz-full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+}
+
+section:-ms-full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+}
+
+section:-o-full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+}
+
+section:full-screen {
+	float: none;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	border: 0 none;
+}
+</style>
+</head>
+<body>
+
+<header>
+<h1>Screen Saver</h1>
+</header>
+<article>
+<section id="fullscreen">
+<img id='view' src='clear.gif' />
+<p>Click to view full-screen.</p>
+</section>
+</article>
+<script>
+
+// for image rotation from image, see:
+// https://gist.github.com/runeb/c11f864cd7ead969a5f0
+
+////////////////////////////////////////////////////////////////
+/// fullscreen code starts
+
+
+var e = document.getElementById("fullscreen");
+e.onclick = function() {
+    if (RunPrefixMethod(document, "FullScreen") || RunPrefixMethod(document, "IsFullScreen")) {
+	RunPrefixMethod(document, "CancelFullScreen");
+    }
+    else {
+	RunPrefixMethod(e, "RequestFullScreen");
+    }
+}
+
+var pfx = ["webkit", "moz", "ms", "o", ""];
+function RunPrefixMethod(obj, method) {
+    var p = 0, m, t;
+    for(var p=0; p < pfx.length && !obj[m]; p++) {
+	m = method;
+	if (pfx[p] == "") {
+	    m = m.substr(0,1).toLowerCase() + m.substr(1);
+	}
+	m = pfx[p] + m;
+	t = typeof obj[m];
+	if (t != "undefined") {
+	    pfx = [pfx[p]];
+	    return (t == "function" ? obj[m]() : obj[m]);
+	}
+    }
+}
+/// fullscreen code ends
+////////////////////////////////////////////////////////////////
+
+
+function basename(path) {
+     return path.replace(/.*\//, '');
+}
+
+function dirname(path) {
+     return path.match(/.*\//);
+}
+
+var cgi   = dirname(window.location.href) + "screensaver.cgi";
+var first = dirname(window.location.href) + "squirrel.jpg";
+
+var $image = $("#view");
+var $downloadingImage = $("<img>");
+$downloadingImage.load(function() {
+    $image.attr("src", $(this).attr("src"));
+});
+$downloadingImage.attr("src", first);
+
+function DisplayRandomImage() {
+    $.getJSON(cgi + '?action=random', function(data){
+        hash = data['random'];
+        console.log("DisplayRandomImage code=",hash);
+        $.getJSON(cgi + '?action=get&hash=' + hash, function(d2) {
+            console.log("got image; displaying");
+            $image.attr("src", "data:text/css;base64," + d2['image_base64'])
+        });
+    });
+}
+
+var runs = [];
+function DisplayRandomRuns() {
+    $.getJSON($url + '?action=random', function(data){
+        $.getJSON($url + '?action=get&hash=' + data['random'], function(d2) {
+            $image.attr("src", "data:text/css;base64," + d2['image_base64'])
+        });
+    });
+}
+
+var delay_seconds = 5;
+setInterval(DisplayRandomImage, delay_seconds * 1000);
+
+
+
+</script>
+</body>
+</html>

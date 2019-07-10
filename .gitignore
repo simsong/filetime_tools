@@ -9,3 +9,4 @@ data.sqlite3
 jquery*.js
 out.json
 words.json
+.DS_Store
