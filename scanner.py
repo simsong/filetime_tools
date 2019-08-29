@@ -1,6 +1,7 @@
 ### scanner.py
 ###
 ### part of the file system change
+### scans the file system
 
 ############################################################
 ############################################################
@@ -12,18 +13,7 @@ import zipfile
 import time
 from dbfile import DBFile, SLGSQL
 
-
 COMMIT_RATE = 10  # commit every 10 directories
-
-def hash_file(f):
-    """High performance file hasher. Hash a file and return the MD5 hexdigest."""
-    from hashlib import md5
-    m = md5()
-    while True:
-        buf = f.read(65535)
-        if not buf:
-            return m.hexdigest()
-        m.update(buf)
 
 def open_zipfile(path):
     """Check to see if path is a zipfile.
@@ -73,9 +63,12 @@ class Scanner(object):
                        (dirnameid, filenameid,))
         return self.c.fetchone()[0]
 
-    def insert_file(self, path, mtime, file_size, handle, scanid):
-        """@mtime in time_t"""
-        pathid = self.get_pathid(path)
+    def get_file_hashid(self, *, f=None, pathname=None, file_size, pathid=None, mtime, hexdigest=None):
+        """Given an open file or a filename, Return the MD5 hexdigest."""
+        if pathid is None:
+            if pathname is None:
+                raise RuntimeError("pathid and pathname are both None")
+            pathid = self.get_pathid(pathname)
 
         # See if this file with this length is in the database.
         # If not, we will hash the file and enter it.
@@ -84,22 +77,43 @@ class Scanner(object):
         self.c.execute("SELECT hashid FROM files WHERE pathid=? AND mtime=? AND size=? LIMIT 1",
                        (pathid, mtime, file_size))
         row = self.c.fetchone()
+        if row:
+            return row[0]
+
+        # Hashid is not in the database. Hash the file if we don't have the hash
+        if hexdigest is None:
+            if f is None:
+                f = open(pathname,'rb')
+
+            from hashlib import md5
+            m = md5()
+            while True:
+                buf = f.read(65535)
+                if not buf:
+                    break
+                m.update(buf)
+            hexdigest = m.hexdigest()
+        return self.get_hashid( hexdigest )
+        
+
+    def insert_file(self, path, mtime, file_size, handle):
+        """@mtime in time_t"""
+        pathid = self.get_pathid(path)
+
         try:
-            if row:
-                (hashid,) = row
-            else:
-                hashid = self.get_hashid(hash_file(handle))
-            self.c.execute("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (?,?,?,?,?)",
-                           (pathid, mtime, file_size, hashid, scanid))
-            if self.args.vfiles:
-                print("{} {}".format(path, file_size))
+            hashid = self.get_file_hashid(pathid=pathid,mtime=mtime,file_size=file_size,f=handle)
         except PermissionError as e:
-            pass
+            return
         except OSError as e:
-            pass
+            return
+
+        self.c.execute("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (?,?,?,?,?)",
+                       (pathid, mtime, file_size, hashid, self.scanid))
+        if self.args.vfiles:
+            print("{} {}".format(path, file_size))
 
 
-    def process_filepath(self, scanid, path):
+    def process_filepath(self, path):
         """ Add the file to the database database.
         If it is there and the mtime hasn't been changed, don't re-hash."""
 
@@ -108,48 +122,58 @@ class Scanner(object):
         except FileNotFoundError as e:
             return
 
-        self.insert_file(path,st.st_mtime,st.st_size,open(path,"rb"),scanid)
+        self.insert_file(path,st.st_mtime,st.st_size,open(path,"rb"))
 
-    def process_zipfile(self, scanid, path, zf):
+    def process_zipfile(self, path, zf):
         """Scan a zip file and insert it into the database"""
         for zi in zf.infolist():
             mtime = time.mktime(zi.date_time + (0,0,0))
-            self.insert_file(path+"/"+zi.filename, mtime, zi.file_size,zf.open(zi.filename,"r"), scanid)
+            self.insert_file(path+"/"+zi.filename, mtime, zi.file_size,zf.open(zi.filename,"r"))
 
-    def ingest(self, root):
-        """Ingest everything from the root"""
-
+    def ingest_start(self, root):
+        print("ingest_start")
+        self.count = 0
+        self.dircount = 0
+        self.scanid = self.get_scanid(SLGSQL.iso_now())
         self.c = self.conn.cursor()
-        self.c.execute("BEGIN TRANSACTION")
+        #self.c.execute("BEGIN TRANSACTION")
 
-        scanid = self.get_scanid(SLGSQL.iso_now())
 
-        count = 0
-        dircount = 0
-        t0 = time.time()
+    def ingest_walk(self, root):
+        """Walk the local file system and go inside ZIP files"""
         for (dirpath, dirnames, filenames) in os.walk(root):
             if self.args.vdirs:
                 print("{}".format(dirpath), end='\n' if self.args.vfiles else '')
             for filename in filenames:
-                zipfile = os.path.join(dirpath, filename)
-                self.process_filepath(scanid, zipfile)
-                zf = open_zipfile(zipfile)
+                zipfilename = os.path.join(dirpath, filename)
+                self.process_filepath(zipfilename)
+                zf = open_zipfile(zipfilename)
                 if zf:
-                    self.process_zipfile(scanid,zipfile, zf)
+                    self.process_zipfile( zipfilename, zf)
 
             if self.args.vdirs:
                 print("\r{}:  {}".format(dirpath,len(filenames)))
-            count += len(filenames)
-            dircount += 1
-            if dircount % COMMIT_RATE == 0:
+            self.count += len(filenames)
+            self.dircount += 1
+            if self.dircount % COMMIT_RATE == 0:
                 self.conn.commit()
 
         self.conn.commit()
-        t1 = time.time()
-        self.c.execute("UPDATE scans SET duration=? WHERE scanid=?", (t1 - t0, scanid))
-        print("Total files added to database: {}".format(count))
-        print("Total directories scanned:     {}".format(dircount))
-        print("Total time: {}".format(int(t1 - t0)))
+
+    def ingest_done(self, root):
+        self.c.execute("UPDATE scans SET duration=? WHERE scanid=?", (self.t1 - self.t0, self.scanid))
+        print("Total files added to database: {}".format(self.count))
+        print("Total directories scanned:     {}".format(self.dircount))
+        print("Total time: {}".format(int(self.t1 - self.t0)))
+
+    def ingest(self, root):
+        """Ingest everything from the root"""
+
+        self.ingest_start(root)
+        self.t0 = time.time()
+        self.ingest_walk(root)
+        self.t1 = time.time()
+        self.ingest_done(root)
 
 
 ###################### END OF SCANNER CLASS ######################

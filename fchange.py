@@ -13,7 +13,7 @@ import sqlite3
 import sys
 
 from dbfile import DBFile, SLGSQL
-from scanner import Scanner
+import scanner, s3scanner
 
 CACHE_SIZE = 2000000
 SQL_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
@@ -315,7 +315,6 @@ if __name__ == "__main__":
         create_database(args.db, args.create)
         print("Created {}  root: {}".format(args.db, args.create))
 
-
     if args.scans:
         list_scans(sqlite3.connect(args.db))
         exit(0)
@@ -336,13 +335,15 @@ if __name__ == "__main__":
             print("Usage: --report N-M")
             exit(1)
         report(conn, int(m.group(1)), int(m.group(2)))
-
-    if args.jreport:
+    elif args.jreport:
         jreport(conn)
-
-    if args.dups:
+    elif args.dups:
         report_dups(conn, last_scan(conn))
-
-    root = get_root(conn)
-    print("Scanning: {}".format(root))
-    Scanner(conn,args).ingest(root)
+    else:
+        root = get_root(conn)
+        print("Scanning: {}".format(root))
+        if root.startswith("s3://"):
+            sc = s3scanner.S3Scanner(conn,args)
+        else:
+            sc = scanner.Scanner(conn,args)
+        sc.ingest(root)
