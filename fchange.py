@@ -13,7 +13,7 @@ import sqlite3
 import sys
 
 from dbfile import DBFile, SLGSQL
-import scanner, s3scanner
+import scanner
 
 CACHE_SIZE = 2000000
 SQL_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
@@ -308,7 +308,7 @@ if __name__ == "__main__":
     parser.add_argument("--out", help="Specifies output filename")
     parser.add_argument("--vfiles", help="Report each file as ingested",action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested",action="store_true")
-
+    parser.add_argument("--limit", help="Only search this many", type=int)
     args = parser.parse_args()
 
     if args.create:
@@ -343,7 +343,7 @@ if __name__ == "__main__":
         root = get_root(conn)
         print("Scanning: {}".format(root))
         if root.startswith("s3://"):
-            sc = s3scanner.S3Scanner(conn,args)
+            sc = scanner.S3Scanner(conn, args)
         else:
-            sc = scanner.Scanner(conn,args)
+            sc = scanner.Scanner(conn, args)
         sc.ingest(root)
