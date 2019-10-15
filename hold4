@@ -1,0 +1,2 @@
+CACHE_SIZE = 2000000
+SQLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)

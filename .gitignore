@@ -1,5 +1,7 @@
 *.bak
 *.db
+*.db-journal
+*.out
 *.sqlite3
 *~
 .DS_Store
@@ -9,4 +11,3 @@ data.sqlite3
 jquery*.js
 out.json
 words.json
-.DS_Store
