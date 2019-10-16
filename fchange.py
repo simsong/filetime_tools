@@ -266,8 +266,8 @@ def jreport(conn):
     with (open(args.out, "w") if args.out else sys.stdout) as fp:
         def dump_dictionary(fp, name, val):
             fp.write("var " + name + " = {};\n")
-            for key in val:
-                fp.write('{}[{}] = {};\n'.format(name, json.dumps(key), json.dumps(val[key])))
+            for name in val:
+                fp.write('{}[{}] = {};\n'.format(name, json.dumps(name), json.dumps(val[name])))
 
         dump_dictionary(fp, "all_files", all_files)
         dump_dictionary(fp, "new_files", new_files)
@@ -290,7 +290,6 @@ def create_database(name, root):
     conn.cursor().execute("INSERT INTO metadata (key, value) VALUES (?,?)", ("root", root))
     conn.commit()
     conn.close()
-
 
 if __name__ == "__main__":
     import argparse

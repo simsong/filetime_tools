@@ -1,17 +1,36 @@
-### scanner.py
-###
-### part of the file system change
-### scans the file system
+"""
+scanner.py
 
-############################################################
-############################################################
-
+Part of the file system change detector.
+Implements the scanner.
+"""
 
 import os
 import sys
 import zipfile
 import time
 from dbfile import DBFile, SLGSQL
+import sqlite3
+
+# SQLite3 schema
+SQLITE3_SCHEMA = open("schema_sqlite3.sql","r").read()
+MYSQL_SCHEMA   = open("schema_mysql.sql","r").read()
+
+CACHE_SIZE = 2000000
+SQLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
+
+COMMIT_RATE = 10  # commit every 10 directories
+
+def hash_file(f):
+    """High performance file hasher. Hash a file and return the MD5 hexdigest."""
+    from hashlib import md5
+    m = md5()
+    while True:
+        buf = f.read(65535)
+        if not buf:
+            return m.hexdigest()
+        m.update(buf)
+
 
 def open_zipfile(path):
     """Check to see if path is a zipfile.
