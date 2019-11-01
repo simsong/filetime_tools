@@ -11,6 +11,7 @@ import zipfile
 import time
 from dbfile import DBFile, SLGSQL
 import sqlite3
+import pymysql.cursors
 
 # SQLite3 schema
 SQLITE3_SCHEMA = open("schema_sqlite3.sql","r").read()
@@ -42,6 +43,8 @@ def open_zipfile(path):
     except zipfile.BadZipfile:
         return None
     except zipfile.LargeZipFile:
+        return None
+    except IOError:
         return None
 
 class Scanner(object):
@@ -205,6 +208,7 @@ class S3Scanner(Scanner):
 
     def ingest_walk(self, root):
         """Scan S3"""
+        from ctools import s3
         (bucket,key) = s3.get_bucket_key(root)
         for obj in s3.list_objects(bucket,key):
             # {'LastModified': '2019-03-28T21:36:51.000Z', 
@@ -221,5 +225,118 @@ class S3Scanner(Scanner):
             if self.filecount %100==0:
                 self.conn.commit()
         print("Scan S3: ",root)
-        
 
+
+# TODO: IMPLEMENT
+class MySQLScanner(Scanner):
+    """Extends the Scanner class and implements MySQL db storage"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args,**kwargs)
+
+    def get_hashid(self, hexhash):
+        with self.conn.cursor() as cursor:
+            cursor.execute("INSERT IGNORE INTO `{}`.hashes (hash) VALUES ('{}')".format(self.args.db,hexhash))
+            cursor.execute("SELECT hashid FROM `{}`.hashes WHERE hash='{}' LIMIT 1".format(self.args.db,hexhash))
+            rows = cursor.fetchall()
+            for row in rows:
+                return row[0]
+
+    def get_scanid(self, now):
+        with self.conn.cursor() as cursor:
+            cursor.execute("INSERT IGNORE INTO `{}`.scans (time) VALUES ('{}')".format(self.args.db,now))
+            cursor.execute("SELECT scanid FROM `{}`.scans WHERE time='{}' LIMIT 1".format(self.args.db,now))
+            rows = cursor.fetchall()
+            for row in rows:
+                return row[0]
+
+    def get_pathid(self, path):
+        (dirname, filename) = os.path.split(path)
+        with self.conn.cursor() as cursor:
+            # dirname
+            cursor.execute("INSERT IGNORE INTO `{}`.dirnames (dirname) VALUES ('{}')".format(self.args.db,dirname))
+            cursor.execute("SELECT dirnameid FROM`{}`.dirnames WHERE dirname='{}' LIMIT 1".format(self.args.db,dirname))
+            rows = cursor.fetchall()
+            for row in rows:
+                dirnameid = row[0]
+            
+            # filename
+            cursor.execute("INSERT IGNORE INTO `{}`.filenames (filename) VALUES ('{}')".format(self.args.db,filename))
+            cursor.execute("SELECT filenameid FROM `{}`.filenames WHERE filename='{}' LIMIT 1".format(self.args.db,filename))
+            rows = cursor.fetchall()
+            for row in rows:
+                filenameid = row[0]
+            # pathid
+            cursor.execute("INSERT IGNORE INTO `{}`.paths (dirnameid, filenameid) VALUES ({},{})".format(self.args.db, dirnameid, filenameid))
+            cursor.execute("SELECT pathid FROM `{}`.paths WHERE dirnameid={} LIMIT 1".format(self.args.db, dirnameid, filenameid))
+            rows = cursor.fetchall()
+            for row in rows:
+                return row[0]
+            raise RuntimeError(f"no pathid found for {dirnameid},{filenameid}")
+
+    def get_file_hashid(self, *, f=None, pathname=None, file_size, pathid=None, mtime, hexdigest=None):
+        """Given an open file or a filename, Return the MD5 hexdigest."""
+        if pathid is None:
+            if pathname is None:
+                raise RuntimeError("pathid and pathname are both None")
+            pathid = self.get_pathid(pathname)
+        
+        # Check if file with this length is in db
+        # If not, we has that file and enter it.
+        # Trusting that mtime gets updated if the file contents change.
+        # We might also want to look at the file gen count.
+        with self.conn.cursor() as cursor:
+            cursor.execute("SELECT hashid FROM `{}`.files WHERE pathid={} AND mtime={} AND size={} LIMIT 1".format(self.args.db, pathid, mtime, file_size))
+            rows = cursor.fetchall()
+            for row in rows:
+                return row[0]
+        
+        # Hashid is not in the database. Hash the file if we don't have the hash
+        if hexdigest is None:
+            if f is None:
+                f = open(pathname, 'rb')
+
+            from hashlib import md5
+            m = md5()
+            while True:
+                buf = f.read(65535)
+                if not buf:
+                    break
+                m.update(buf)
+            hexdigest = m.hexdigest()
+        return self.get_hashid( hexdigest )
+
+
+    def insert_file(self, *, path, mtime, file_size, handle=None, hexdigest=None):
+        """@mtime in time_t"""
+        pathid = self.get_pathid(path)
+
+        try:
+            hashid = self.get_file_hashid(pathid=pathid, mtime=mtime, file_size=file_size, f=handle, hexdigest=hexdigest)
+        except PermissionError as e:
+            return
+        except OSError as e:
+            return
+
+        with self.conn.cursor() as cursor:
+            cursor.execute("INSERT INTO `{}`.files (pathid,mtime,size,hashid,scanid) VALUES ({},{},{},{},{})".format(self.args.db, int(pathid), int(mtime), int(file_size), int(hashid), int(self.scanid)))
+        if self.args.vfiles:
+            print("{} {}".format(path, file_size))
+
+
+    def ingest_done(self, root):
+        with self.conn.cursor() as cursor:
+            cursor.execute("UPDATE `{}`.scans SET duration={} WHERE scanid={}".format(self.args.db, self.t1 - self.t0, self.scanid))
+        self.conn.commit()
+        print("Total files added to database: {}".format(self.filecount))
+        print("Total directories scanned:     {}".format(self.dircount))
+        print("Total time: {}".format(int(self.t1 - self.t0)))
+
+
+
+class MySQLS3Scanner(MySQLScanner):
+    """Extends the MySQLScanner class to scan Amazon S3 server instances"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args,**kwargs)
+
+    def ingest_walk(self, root):
+        pass
