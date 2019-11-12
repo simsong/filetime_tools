@@ -237,13 +237,13 @@ class MySQLScanner(Scanner):
         super().__init__(*args,**kwargs)
 
     def get_hashid(self, hexhash):
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.hashes (hash) VALUES ('{}')".format(self.args.db,hexhash))
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.hashes (hash) VALUES (%s)".format(self.args.db), vals=[hexhash])
         result = self.conn.csfr(self.auth, "SELECT hashid FROM `{}`.hashes WHERE hash='{}' LIMIT 1".format(self.args.db,hexhash))
         for row in result:
             return row[0]
 
     def get_scanid(self, now):
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.scans (time) VALUES ('{}')".format(self.args.db,now))
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.scans (time) VALUES (%s)".format(self.args.db),vals=[now])
         result = self.conn.csfr(self.auth, "SELECT scanid FROM `{}`.scans WHERE time='{}' LIMIT 1".format(self.args.db,now))
         for row in result:
             return row[0]
@@ -251,20 +251,20 @@ class MySQLScanner(Scanner):
     def get_pathid(self, path):
         (dirname, filename) = os.path.split(path)    
         # dirname
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.dirnames (dirname) VALUES ('{}')".format(self.args.db, dirname))
-        dirids = self.conn.csfr(self.auth, "SELECT dirnameid FROM`{}`.dirnames WHERE dirname='{}' LIMIT 1".format(self.args.db,dirname))
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.dirnames (dirname) VALUES (%s)".format(self.args.db), vals=[dirname])
+        dirids = self.conn.csfr(self.auth, "SELECT dirnameid FROM`{}`.dirnames WHERE dirname=%s LIMIT 1".format(self.args.db),vals=[dirname])
         for dirid in dirids:
             dirnameid = dirid[0]
 
         # filename
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.filenames (filename) VALUES ('{}')".format(self.args.db, filename))
-        fileids = self.conn.csfr(self.auth, "SELECT filenameid FROM`{}`.filenames WHERE filename='{}' LIMIT 1".format(self.args.db,filename))
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.filenames (filename) VALUES (%s)".format(self.args.db), vals=[filename])
+        fileids = self.conn.csfr(self.auth, "SELECT filenameid FROM`{}`.filenames WHERE filename=%s LIMIT 1".format(self.args.db), vals=[filename])
         for fileid in fileids:
             filenameid = fileid[0]
 
         # pathid
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.paths (dirnameid, filenameid) VALUES ({},{})".format(self.args.db, dirnameid, filenameid))
-        pathids = self.conn.csfr(self.auth, "SELECT pathid FROM`{}`.paths WHERE dirnameid={} and filenameid={} LIMIT 1".format(self.args.db,dirnameid,filenameid))
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.paths (dirnameid, filenameid) VALUES (%s,%s)".format(self.args.db), vals=[dirnameid, filenameid])
+        pathids = self.conn.csfr(self.auth, "SELECT pathid FROM`{}`.paths WHERE dirnameid=%s and filenameid=%s LIMIT 1".format(self.args.db),vals=[dirnameid,filenameid])
         for pathid in pathids:
             return pathid[0]
         raise RuntimeError(f"no pathid found for {dirnameid},{filenameid}")
@@ -280,7 +280,7 @@ class MySQLScanner(Scanner):
         # If not, we has that file and enter it.
         # Trusting that mtime gets updated if the file contents change.
         # We might also want to look at the file gen count.
-        result = self.conn.csfr(self.auth, "SELECT hashid FROM `{}`.files WHERE pathid={} AND mtime='{}' AND size={} LIMIT 1".format(self.args.db, pathid, mtime, file_size))
+        result = self.conn.csfr(self.auth, "SELECT hashid FROM `{}`.files WHERE pathid=%s AND mtime=%s AND size=%s LIMIT 1".format(self.args.db), vals=[pathid, mtime, file_size])
         for row in result:
             return row[0]
 
@@ -311,9 +311,9 @@ class MySQLScanner(Scanner):
         except OSError as e:
             return
         self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,mtime,size,hashid,scanid) "
-                                "VALUES ({},'{}',{},{},{})".format(
-                                self.args.db, int(pathid), int(mtime),
-                                int(file_size), int(hashid), int(self.scanid)))
+                                "VALUES (%s,%s,%s,%s,%s)".format(
+                                self.args.db) , vals=[int(pathid), int(mtime),
+                                int(file_size), int(hashid), int(self.scanid)])
         
         if self.args.vfiles:
             print("{} {}".format(path, file_size))
@@ -348,7 +348,7 @@ class MySQLScanner(Scanner):
                     print(e)
 
     def ingest_done(self, root):
-        self.conn.csfr(self.auth, "UPDATE `{}`.scans SET duration={} WHERE scanid={}".format(self.args.db, self.t1 - self.t0, self.scanid))
+        self.conn.csfr(self.auth, "UPDATE `{}`.scans SET duration=%s WHERE scanid=%s".format(self.args.db), vals=[self.t1 - self.t0, self.scanid])
         self.conn.commit()
         print("Total files added to database: {}".format(self.filecount))
         print("Total directories scanned:     {}".format(self.dircount))
@@ -373,9 +373,9 @@ class MySQLS3Scanner(MySQLScanner):
         except OSError as e:
             return
         self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,mtime,size,hashid,scanid) "
-                                "VALUES ({},'{}',{},{},{})".format(
-                                self.args.db, int(pathid), mtime.replace('Z', '').replace('T', ' '),
-                                int(file_size), int(hashid), int(self.scanid)))
+                                "VALUES (%s,%s,%s,%s,%s)".format(
+                                self.args.db), vals=[int(pathid), mtime.replace('Z', '').replace('T', ' '),
+                                int(file_size), int(hashid), int(self.scanid)])
         
         if self.args.vfiles:
             print("{} {}".format(path, file_size))

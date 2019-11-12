@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 
 import scanner
 from ctools.dbfile import *
+from ctools.tydoc import *
 import pymysql
 # from dbfile import DBFile, SLGSQL
 
@@ -439,7 +440,6 @@ class SQLite3FileChangeManager(FileChangeManager):
         conn.close()
 
 
-# TODO: Implement this class. Refactor the global functions.
 class MySQLFileChangeManager(FileChangeManager):
 
     def __init__(self, conn, auth, database):
@@ -449,7 +449,6 @@ class MySQLFileChangeManager(FileChangeManager):
 
     def list_scans(self):
         with self.conn as c:
-            # cursor = c.cursor()
             c.execute("SELECT scanid, time FROM `{}`.scans".format(self.database))
             results = c.fetchall()
             for (scanid, time) in results:
@@ -464,11 +463,12 @@ class MySQLFileChangeManager(FileChangeManager):
                     "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
                     "WHERE scanid={}".format(self.database, scan0))
             for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in c.fetchall():
-                yield fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime
+                yield {"fileid":fileid, "pathid":pathid, "size":size,
+                "dirnameid":dirnameid, "dirname":dirname, "filenameid":filenameid,
+                "filename":filename, "mtime":mtime }
 
     def get_new_files(self, scan0, scan1):
         """Files in scan scan1 that are not in scan scan0"""
-        # with self.conn as c:
         ret = []
         results = self.conn.csfr(self.auth, "SELECT fileid, pathid, size,  dirnameid, dirname, filenameid, filename, mtime "
             "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
@@ -489,28 +489,33 @@ class MySQLFileChangeManager(FileChangeManager):
                 "JOIN (SELECT pathid, hashid, scanid FROM `{db}`.FILES WHERE scanid={scan1}) as b "
                 "ON a.pathid=b.pathid WHERE a.hashid != b.hashid".format(db=self.database, scan0=scan0, scan1=scan1))
         for pathid, ahashid, bhashid in results:
-            ret.append({"pathid":pathid, "ahashid":ahashid, "bhashid":bhashid})
-        return ret
+            dirnameid, filenameid = self.conn.csfr(self.auth, 
+            "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(self.database, pathid))[0]
+            dirname = self.conn.csfr(self.auth,
+            "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database, dirnameid))[0][0]
+            filename = self.conn.csfr(self.auth,
+            "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database, filenameid))[0][0]
+            yield {"dirname":dirname, "filename":filename}
+        #     ret.append({"pathid":pathid, "ahashid":ahashid, "bhashid":bhashid})
+        # return ret
 
     def get_duplicate_files(self, scan0):
         """Return a generator for the duplicate files at scan0.
         Returns a list of a list of File objects, sorted by size"""
-        with self.conn as c, self.conn as d:
-            c.execute('SELECT hashid, ct, size FROM '
-                '(SELECT hashid, count(hashid) AS ct, size FROM `{dbname}`.files WHERE scanid={scanid} GROUP BY hashid, size) as T '
-                'WHERE ct>1 AND size>{dupsize} ORDER BY 3 DESC;'.format(dbname=self.database, scanid=scan0, dupsize=args.dupsize))
-            cresult = c.fetchall()
-            for (hashid, ct, size) in cresult:
-                ret = []
-                d.execute(
-                    "SELECT fileid,pathid,size,dirnameid,dirname,filenameid,filename,mtime "
-                    "FROM `{dbname}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-                    "WHERE scanid={scanid} AND hashid={hashid}".format(dbname=self.database, scanid=scan0, hashid=hashid))
-                for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in c.fetchall():
-                    ret.append({"fileid":fileid, "pathid":pathid, "size":size,
-                    "dirnameid":dirnameid, "dirname":dirname, "filenameid":filenameid, 
-                    "filename":filename, "mtime":mtime})
-                    yield [f for f in ret]
+        cresult = self.conn.csfr(self.auth, 'SELECT hashid, ct, size FROM '
+            '(SELECT hashid, count(hashid) AS ct, size FROM `{dbname}`.files WHERE scanid={scanid} GROUP BY hashid, size) as T '
+            'WHERE ct>1 AND size>{dupsize} ORDER BY 3 DESC;'.format(dbname=self.database, scanid=scan0, dupsize=args.dupsize))
+        for hashid, ct, size in cresult:
+            ret = []
+            dresult = self.conn.csfr(self.auth,
+                'SELECT fileid,pathid,size,dirnameid,dirname,filenameid,filename,mtime '
+                'FROM `{dbname}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames '
+                'WHERE scanid={scanid} AND hashid={hashid}'.format(dbname=self.database, scanid=scan0, hashid=hashid))
+            for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in dresult:
+                ret.append({"fileid":fileid, "pathid":pathid, "size":size,
+                "dirnameid":dirnameid, "dirname":dirname, "filenameid":filenameid, 
+                "filename":filename, "mtime":mtime})
+            yield ret
 
     def renamed_files(self, scan0, scan1):
         """Return a generator for the duplicate files at scan0.
@@ -530,51 +535,72 @@ class MySQLFileChangeManager(FileChangeManager):
 
         for (hashID, path2, count) in get_singletons(scan1):
             if hashID in path1_for_hash and (hashID, path2) not in pairs_in_scan0:
-                yield (DBFile_MySQL({"hashid": hashID, "pathid": path1_for_hash[hashID]}),
-                    DBFile_MySQL({"hashid": hashID, "pathid": path2}))
+                # yield (DBFile_MySQL({"hashid": hashID, "pathid": path1_for_hash[hashID]}),
+                #     DBFile_MySQL({"hashid": hashID, "pathid": path2}))
                     # TODO: Figure out how to implement the above
+                yield ({"hashid":hashID, "pathid":path1_for_hash[hashID]},
+                        {"hashid": hashID, "pathid": path2})
     
     def report(self, a, b):
+        docs = None
+        if args.out:
+            docs = tydoc()
         atime = self.conn.execselect("SELECT time FROM `{}`.scans WHERE scanid={}".format(self.database, a))
         btime = self.conn.execselect("SELECT time FROM `{}`.scans WHERE scanid={}".format(self.database, b))
 
-        if atime is None or btime is None:
-            print("Invalid scan in input")
-            exit(1)
+        if atime is None:
+            atime = 0
         else:
             atime = atime[0]
+        
+        if btime is None:
+            btime = 0
+        else:
             btime = btime[0]
         print("Report from {}->{}".format(str(atime), str(btime)))
 
+        if args.out: docs.set_title("Report from {}->{}".format(str(atime), str(btime)))
+
         print()
         print("New files:")
+        if args.out: docs.h1("New files:")
         for f in self.get_new_files(a, b):
+            if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
             print(os.path.join(f["dirname"], f["filename"]))
 
         print()
         print("Changed files:")
+        if args.out: docs.h1("Changed files:")
         for f in self.changed_files(a, b):
-            print(f)
+            if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
+            print(os.path.join(f['dirname'], f['filename']))
 
         print()
         print("Deleted files:")
+        if args.out: docs.h1("Deleted files:")
         for f in self.deleted_files(a, b):
-            # TODO: ADD REPLACEMENT FOR get_path
-            print("todo")
+            if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
+            print(os.path.join(f["dirname"], f["filename"]))
+
 
         print()
         print("Renamed files:")
+        if args.out: docs.h1("Renamed files:")
         for f in self.renamed_files(a, b):
-        # TODO: ADD REPLACEMENT FOR get_path
-            print("todo")
+            if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
+            print(os.path.join(f["dirname"], f["filename"]))
 
         print()
         print("Duplicate files:")
+        if args.out: docs.h1("Duplicate files:")
         for dups in self.get_duplicate_files(b):
+            if args.out: docs.p("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
             print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
             for dup in dups:
+                if args.out: docs.p("    {}".format(os.path.join(dup["dirname"],dup["filename"])))
                 print("    {}".format(os.path.join(dup["dirname"],dup["filename"])))
         print("\n-----------")
+        if args.out: docs.save(args.out.split('/')[-1] + ".html")
 
     def report_dups(self, scan0):
         import codecs
@@ -609,36 +635,38 @@ class MySQLFileChangeManager(FileChangeManager):
         filenameids = {}
         fileids = {}  # map of fileids.
 
-        last = last_scan(conn, dbname)
+        last = self.last_scan()
 
         def backfill(f):
-            if (f.fileid == None or f.dirnameid == None or f.filenameid == None
-                or f.size == None or f.mtime == None):
+            if (f['fileid'] == None or f['dirnameid'] == None or f['filenameid'] == None
+                or f['size'] == None or f['mtime'] == None):
                 print("f:", f)
                 exit(1)
-            if f.fileid not in fileids:
-                fileids[f.fileid] = (f.dirnameid, f.filenameid, f.size, f.mtime)
-            if f.dirnameid not in dirnameids:
-                dirnameids[f.dirnameid] = f.get_dirname(conn)
-            if f.filenameid not in filenameids:
-                filenameids[f.filenameid] = f.get_filename(conn)
+            if f['fileid'] not in fileids:
+                fileids[f['fileid']] = (f['dirnameid'], f['filenameid'], f['size'], f['mtime'])
+            if f['dirnameid'] not in dirnameids:
+                dirnameids[f['dirnameid']] = self.conn.csfr(self.auth,
+                "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database, f['dirnameid']))
+            if f['filenameid'] not in filenameids:
+                filenameids[f['filenameid']] = self.conn.csfr(self.auth,
+                "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database, f['filenameid']))
 
         print("all_files")
         all_files = defaultdict(list)
-        for f in get_all_files(conn, last, dbname):
-            all_files[f.filename].append(f.fileid)
+        for f in self.get_all_files(last):
+            all_files[f["filename"]].append(f["fileid"])
             backfill(f)
 
         print("new_files")
         new_files = defaultdict(list)
-        for f in get_new_files(conn, last - 1, last, dbname):
-            new_files[f.filename].append(f.fileid)
+        for f in self.get_new_files(last - 1, last):
+            new_files[f['filename']].append(f['fileid'])
             backfill(f)
 
         print("duplicate files")
         duplicate_files = []
-        for dups in get_duplicate_files(conn, last, dbname):
-            duplicate_files.append([f.fileid for f in dups])
+        for dups in self.get_duplicate_files(last):
+            duplicate_files.append([f['fileid'] for f in dups])
             for f in dups:
                 backfill(f)
 
@@ -647,14 +675,12 @@ class MySQLFileChangeManager(FileChangeManager):
                 "fileids": fileids,
                 "all_files": all_files,
                 "new_files": new_files}
-        # with (open(args.out,"w") if args.out else sys.stdout) as fp:
-        #    json.dump(data,fp)
         # Make the JavaScript file
         with (open(args.out, "w") if args.out else sys.stdout) as fp:
             def dump_dictionary(fp, name, val):
                 fp.write("var " + name + " = {};\n")
                 for name in val:
-                    fp.write('{}[{}] = {};\n'.format(name, json.dumps(name), json.dumps(val[name])))
+                    fp.write('{}[{}] = {};\n'.format(name, json.dumps(name), json.dumps(val[name], indent=4, sort_keys=True, default=str)))
 
             dump_dictionary(fp, "all_files", all_files)
             dump_dictionary(fp, "new_files", new_files)
@@ -739,7 +765,7 @@ if __name__ == "__main__":
     if args.scans:
         fchange.list_scans()
         exit(0)
-
+# 
 
     if args.root:
         c = conn.cursor()
@@ -753,7 +779,7 @@ if __name__ == "__main__":
             exit(1)
         fchange.report(int(m.group(1)), int(m.group(2)))
     elif args.jreport:
-        fchange.jreport(conn)
+        fchange.jreport()
     elif args.dups:
         # report_dups(conn, last_scan(conn))
         fchange.report_dups( fchange.last_scan())
