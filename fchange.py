@@ -109,6 +109,9 @@ MYSQLS3_SCHEMA = \
 DROP TABLE IF EXISTS `filetime_tools`.metadata;
 CREATE TABLE  `filetime_tools`.metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255) NOT NULL);
 
+DROP TABLE IF EXISTS `filetime_tools`.roots;
+CREATE TABLE `filetime_tools`.roots (rootid INTEGER PRIMARY KEY AUTO_INCREMENT, rootdir VARCHAR(255) NOT NULL);
+
 DROP TABLE IF EXISTS `filetime_tools`.dirnames;
 CREATE TABLE  `filetime_tools`.dirnames (dirnameid INTEGER PRIMARY KEY AUTO_INCREMENT,dirname TEXT(65536));
 CREATE UNIQUE INDEX  dirnames_idx2 ON `filetime_tools`.dirnames (dirname(700));
@@ -135,17 +138,19 @@ CREATE INDEX  scans_idx2 ON `filetime_tools`.scans(time);
 
 DROP TABLE IF EXISTS `filetime_tools`.files;
 CREATE TABLE  `filetime_tools`.files (fileid INTEGER PRIMARY KEY AUTO_INCREMENT,
+                                  rootid INTEGER REFERENCES roots(rootid),
                                   pathid INTEGER REFERENCES paths(pathid),
                                   mtime DATETIME NOT NULL, 
                                   size INTEGER NOT NULL, 
                                   hashid INTEGER REFERENCES hashes(hashid), 
                                   scanid INTEGER REFERENCES scans(scanid));
-CREATE INDEX  files_idx1 ON `filetime_tools`.files(pathid);
-CREATE INDEX  files_idx2 ON `filetime_tools`.files(mtime);
-CREATE INDEX  files_idx3 ON `filetime_tools`.files(size);
-CREATE INDEX  files_idx4 ON `filetime_tools`.files(hashid);
-CREATE INDEX  files_idx5 ON `filetime_tools`.files(scanid);
-CREATE INDEX  files_idx6 ON `filetime_tools`.files(scanid,hashid);
+CREATE INDEX  files_idx1 ON `filetime_tools`.files(rootid);
+CREATE INDEX  files_idx2 ON `filetime_tools`.files(pathid);
+CREATE INDEX  files_idx3 ON `filetime_tools`.files(mtime);
+CREATE INDEX  files_idx4 ON `filetime_tools`.files(size);
+CREATE INDEX  files_idx5 ON `filetime_tools`.files(hashid);
+CREATE INDEX  files_idx6 ON `filetime_tools`.files(scanid);
+CREATE INDEX  files_idx7 ON `filetime_tools`.files(scanid,hashid);
 """
 
 """Explanation of tables:
@@ -213,8 +218,21 @@ class FileChangeManager(ABC):
         pass
 
     @abstractmethod
-    def create_database(self, name, root):
+    def get_roots(self):
         pass
+
+    @abstractmethod
+    def add_root(self, root):
+        pass
+
+    @abstractmethod
+    def del_root(self, root):
+        pass
+    
+
+    # @abstractmethod
+    # def create_database(self, name, root):
+    #     pass
 
 class SQLite3FileChangeManager(FileChangeManager):
     def __init__(self, conn):
@@ -429,15 +447,15 @@ class SQLite3FileChangeManager(FileChangeManager):
         return SLGSQL.execselect(conn, "SELECT value FROM metadata WHERE key='root'")[0]
 
 
-    def create_database(name, root):
-        if os.path.exists(name):
-            print("file exists: {}".format(name))
-            exit(1)
-        conn = sqlite3.connect(name)
-        SLGSQL.create_schema(SQL_SCHEMA, conn)
-        conn.cursor().execute("INSERT INTO metadata (key, value) VALUES (?,?)", ("root", root))
-        conn.commit()
-        conn.close()
+    # def create_database(name, root):
+    #     if os.path.exists(name):
+    #         print("file exists: {}".format(name))
+    #         exit(1)
+    #     conn = sqlite3.connect(name)
+    #     SLGSQL.create_schema(SQL_SCHEMA, conn)
+    #     conn.cursor().execute("INSERT INTO metadata (key, value) VALUES (?,?)", ("root", root))
+    #     conn.commit()
+    #     conn.close()
 
 
 class MySQLFileChangeManager(FileChangeManager):
@@ -448,24 +466,22 @@ class MySQLFileChangeManager(FileChangeManager):
         super().__init__(conn)
 
     def list_scans(self):
-        with self.conn as c:
-            c.execute("SELECT scanid, time FROM `{}`.scans".format(self.database))
-            results = c.fetchall()
-            for (scanid, time) in results:
-                print(scanid, time)
+        results = self.conn.csfr(self.auth, "SELECT scanid, time FROM `{}`.scans".format(self.database))
+        for (scanid, time) in results:
+            print(scanid, time)
 
     def last_scan(self):
         return DBMySQL.execselect(self.conn, "SELECT MAX(scanid) from `{}`.scans".format(self.database))[0]
 
     def get_all_files(self, scan0):
-        with self.conn as c:
-            c.execute("SELECT fileid, pathid,  size, dirnameid, dirname, filenameid, filename, mtime "
-                    "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-                    "WHERE scanid={}".format(self.database, scan0))
-            for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in c.fetchall():
-                yield {"fileid":fileid, "pathid":pathid, "size":size,
-                "dirnameid":dirnameid, "dirname":dirname, "filenameid":filenameid,
-                "filename":filename, "mtime":mtime }
+        results = self.conn.csfr(self.auth,
+        "SELECT fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime "
+        "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+        "WHERE scanid={}".format(self.database, scan0))
+        for fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime in results:
+            yield {"fileid":fileid, "pathid":pathid, "rootid":rootid, "size":size,
+            "dirnameid":dirnameid, "dirname":dirname, "filenameid":filenameid,
+            "filename":filename, "mtime":mtime }
 
     def get_new_files(self, scan0, scan1):
         """Files in scan scan1 that are not in scan scan0"""
@@ -517,6 +533,7 @@ class MySQLFileChangeManager(FileChangeManager):
                 "filename":filename, "mtime":mtime})
             yield ret
 
+    # TODO: renamed files only tracks last scanned file. Will consider any file containing the same information as renamed if they have different names.
     def renamed_files(self, scan0, scan1):
         """Return a generator for the duplicate files at scan0.
         The generator returns pairs of (F_old,F_new)
@@ -535,11 +552,22 @@ class MySQLFileChangeManager(FileChangeManager):
 
         for (hashID, path2, count) in get_singletons(scan1):
             if hashID in path1_for_hash and (hashID, path2) not in pairs_in_scan0:
-                # yield (DBFile_MySQL({"hashid": hashID, "pathid": path1_for_hash[hashID]}),
-                #     DBFile_MySQL({"hashid": hashID, "pathid": path2}))
-                    # TODO: Figure out how to implement the above
-                yield ({"hashid":hashID, "pathid":path1_for_hash[hashID]},
-                        {"hashid": hashID, "pathid": path2})
+                dirnameid1, filenameid1 = self.conn.csfr(self.auth, 
+                "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(self.database, path1_for_hash[hashID]))[0]
+                dirname1 = self.conn.csfr(self.auth,
+                "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database, dirnameid1))[0][0]
+                filename1 = self.conn.csfr(self.auth,
+                "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database, filenameid1))[0][0]
+                dirnameid2, filenameid2 = self.conn.csfr(self.auth, 
+                "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(self.database, path2))[0]
+                dirname2 = self.conn.csfr(self.auth,
+                "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database, dirnameid2))[0][0]
+                filename2 = self.conn.csfr(self.auth,
+                "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database, filenameid2))[0][0]
+                yield {"dirname1":dirname1, "filename1":filename1, "dirname2":dirname2, "filename2":filename2}
+                
+                # yield ({"hashid":hashID, "pathid":path1_for_hash[hashID]},
+                #         {"hashid": hashID, "pathid": path2})
     
     def report(self, a, b):
         docs = None
@@ -588,7 +616,7 @@ class MySQLFileChangeManager(FileChangeManager):
         if args.out: docs.h1("Renamed files:")
         for f in self.renamed_files(a, b):
             if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
-            print(os.path.join(f["dirname"], f["filename"]))
+            print(os.path.join(f["dirname1"], f["filename1"]) + " -> " + os.path.join(f["dirname2"], f["filename2"]))
 
         print()
         print("Duplicate files:")
@@ -694,10 +722,51 @@ class MySQLFileChangeManager(FileChangeManager):
         result = self.conn.csfr(auth, "SELECT value FROM `{}`.metadata WHERE name='root'".format(self.database))
         return result[0][0]
 
+    def get_roots(self):
+        roots = self.conn.csfr(auth, "SELECT rootdir FROM `{}`.roots".format(self.database))
+        return roots
 
-    def create_database(self, auth, database, root):
-        self.conn.create_database(auth, database, root)
-        self.conn.create_schema(MYSQL_SCHEMA)
+
+    def add_root(self, root):
+        try:
+            self.conn.csfr(self.auth,
+                            "INSERT IGNORE INTO `{}`.roots (rootdir) VALUES ('{}')".format(self.database, root))
+        except Exception as e:
+            print("Could not add root: {} \n ".format(root), e)
+
+    def del_root(self, root):
+        try:
+            self.conn.csfr(self.auth,
+                            "DELETE IGNORE FROM `{}`.roots WHERE rootdir='{}'".format(self.database, root))
+        except Exception as e:
+            print("Could not delete root: {} \n ".format(root), e)
+
+
+def create_mysql_database(auth, root, schema):
+    try:
+        import mysql.connector as mysql
+        internalError = RuntimeError
+    except ImportError as e:
+        try:
+            import pymysql
+            import pymysql as mysql
+            internalError = pymysql.err.InternalError
+        except ImportError as e:
+            print(f"Please install MySQL connector with 'conda install mysql-connector-python' or the pure-python pymysql connector")
+            raise ImportError()
+
+    conn = mysql.connect(host=auth.host, user=auth.user, password=auth.password)
+
+    c = conn.cursor()
+    c.execute("CREATE DATABASE IF NOT EXISTS {}".format(args.db))
+    schema = schema.replace("filetime_tools", args.db)
+    for line in schema.split(";"):
+        line = line.strip()
+        if len(line)>0:
+            c.execute(line)
+    c.execute("INSERT INTO `{db}`.roots (rootdir) VALUES ('{rootdir}')".format(db=args.db, rootdir=root))
+    conn.commit()
+    conn.close()
 
 
 if __name__ == "__main__":
@@ -706,10 +775,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Compute file changes',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--create", help="Create a database for a given ROOT")
-    parser.add_argument("--db", help="Specify database location", default="data.sqlite3")
-    parser.add_argument("--auth", help="Specify authentication credentials for mysql database", default="localhost:default:root:")
+    parser.add_argument("--db", help="Specify database location", default="das_ftt") # needs to be removed (outdated)
+    parser.add_argument("--config", help="Specify configuration file", default="default.ini")
     parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
-    parser.add_argument("--root", help="List the root in the DB", action='store_true')
+    parser.add_argument("--root", help="List the root in the DB", action='store_true') # initial root? (outdated)
+    parser.add_argument("--roots", help="List all roots in the DB", action='store_true') # initial root?
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
     parser.add_argument("--dups", help="Report duplicates for most recent scan", action='store_true')
@@ -718,27 +788,24 @@ if __name__ == "__main__":
     parser.add_argument("--vfiles", help="Report each file as ingested",action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested",action="store_true")
     parser.add_argument("--limit", help="Only search this many", type=int)
+    parser.add_argument("--addroot", help="Add a new root", type=str)
+    parser.add_argument("--delroot", help="Delete an existing root", type=str)
     args = parser.parse_args()
 
     fchange = None
     auth = None
 
-
-    if args.auth and args.create:
-        try:
-            if args.create.startswith("s3://"):
-                host, database, user, pwd = args.auth.split(":")
-                MySQLDBCreator.create_database(host, user, pwd, database, MYSQLS3_SCHEMA, args.create)
-                print("Created {}  root: {}".format(args.db, args.create))
-            else:
-                host, database, user, pwd = args.auth.split(":")
-                MySQLDBCreator.create_database(host, user, pwd, database, MYSQL_SCHEMA, args.create)
-                print("Created {}  root: {}".format(args.db, args.create))
-        except Exception as e:
-            print("An error occured when attempting to create the database: ", e)
-    elif args.create:
+    if args.create:
+        if args.create.startswith("s3://"):
+            try:
+                auth = DBMySQLAuth.FromEnv(args.config)
+                create_mysql_database(auth, args.create, MYSQLS3_SCHEMA)
+                print("Created {}  initial root: {}".format(args.db, args.create))
+            except Exception as e:
+                print("An error occured when attempting to create the database: ", e)
+    # elif args.create:
         # create an sqlite3 db
-        pass
+        # pass
 
 
     if args.db:
@@ -753,23 +820,34 @@ if __name__ == "__main__":
                 print("Unable to open db file {args.db}", e)
                 exit(1)
         else:
-            host, database, user, pwd = args.auth.split(":")
             try:
-                auth = DBMySQLAuth(host=host,database=database,user=user,password=pwd)
+                auth = DBMySQLAuth.FromEnv(args.config)
                 conn = DBMySQL(auth)
-                fchange = MySQLFileChangeManager(conn, auth, database)
+                fchange = MySQLFileChangeManager(conn, auth, args.db)
             except Exception as e:
                 print("Could not connect to MySQL server: ", e)
                 exit(1)
 
+    if args.addroot:
+        fchange.add_root(args.addroot)
+
+    if args.delroot:
+        fchange.del_root(args.delroot)
+
     if args.scans:
         fchange.list_scans()
         exit(0)
-# 
 
     if args.root:
-        c = conn.cursor()
-        print("Root: {}".format(fchange.get_root()))
+        roots = fchange.get_roots()
+        for root in roots:
+            print(root)
+        exit(0)
+
+    if args.roots:
+        roots = fchange.get_roots()
+        for root in roots:
+            print(root)
         exit(0)
 
     if args.report:
@@ -781,17 +859,18 @@ if __name__ == "__main__":
     elif args.jreport:
         fchange.jreport()
     elif args.dups:
-        # report_dups(conn, last_scan(conn))
         fchange.report_dups( fchange.last_scan())
     else:
-        root = fchange.get_root()
-        print("Scanning: {}".format(root))
-        if root.startswith("s3://") and args.db.endswith(".sqlite3"):
-            sc = scanner.S3Scanner(fchange.conn, args, auth)
-        elif root.startswith("s3://"):
-            sc = scanner.MySQLS3Scanner(conn, args, auth)
-        elif args.db.endswith(".sqlite3"):
-            sc = scanner.Scanner(conn, args, auth)
-        else:
-            sc = scanner.MySQLScanner(conn, args, auth)
-        sc.ingest(root)
+        # root = fchange.get_root()
+        for root in fchange.get_roots():
+            root = root[0]
+            print("Scanning: {}".format(root))
+            if root.startswith("s3://") and args.db.endswith(".sqlite3"):
+                sc = scanner.S3Scanner(fchange.conn, args, auth)
+            elif root.startswith("s3://"):
+                sc = scanner.MySQLS3Scanner(conn, args, auth)
+            elif args.db.endswith(".sqlite3"):
+                sc = scanner.Scanner(conn, args, auth)
+            else:
+                sc = scanner.MySQLScanner(conn, args, auth)
+            sc.ingest(root)
