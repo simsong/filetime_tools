@@ -136,7 +136,7 @@ class Scanner(object):
             print("{} {}".format(path, file_size))
 
 
-    def process_filepath(self, path):
+    def process_filepath(self, root, path):
         """ Add the file to the database database.
         If it is there and the mtime hasn't been changed, don't re-hash."""
 
@@ -145,13 +145,13 @@ class Scanner(object):
         except FileNotFoundError as e:
             return
 
-        self.insert_file(path=path, mtime=st.st_mtime, file_size=st.st_size, handle=open(path,"rb"))
+        self.insert_file(path=path, root=root, mtime=st.st_mtime, file_size=st.st_size, handle=open(path,"rb"))
 
-    def process_zipfile(self, path, zf):
+    def process_zipfile(self, root, path, zf):
         """Scan a zip file and insert it into the database"""
         for zi in zf.infolist():
             mtime = time.mktime(zi.date_time + (0,0,0))
-            self.insert_file(path=path+"/"+zi.filename, mtime=mtime, file_size=zi.file_size, handle=zf.open(zi.filename,"r"))
+            self.insert_file(path=path+"/"+zi.filename, root=root, mtime=mtime, file_size=zi.file_size, handle=zf.open(zi.filename,"r"))
 
     def ingest_start(self, root):
         print("ingest_start")
@@ -172,12 +172,12 @@ class Scanner(object):
                         #
                         # Get full path and process
                         filename_path = os.path.join(dirpath, filename)
-                        self.process_filepath(filename_path)
+                        self.process_filepath(root, filename_path)
 
                         # See if this is a zipfile. If so, process it
                         zf = open_zipfile(filename_path)
                         if zf:
-                            self.process_zipfile( filename_path, zf)
+                            self.process_zipfile(root, filename_path, zf)
                         self.filecount += 1
                         if (self.args.limit is not None) and (self.filecount > self.args.limit):
                             return
@@ -230,7 +230,6 @@ class S3Scanner(Scanner):
         print("Scan S3: ",root)
 
 
-# TODO: IMPLEMENT
 class MySQLScanner(Scanner):
     """Extends the Scanner class and implements MySQL db storage"""
     def __init__(self, *args, **kwargs):
@@ -300,7 +299,7 @@ class MySQLScanner(Scanner):
         return self.get_hashid( hexdigest )
 
 
-    def insert_file(self, *, path, mtime, file_size, handle=None, hexdigest=None):
+    def insert_file(self, *, path, root, mtime, file_size, handle=None, hexdigest=None):
         """@mtime in time_t"""
         pathid = self.get_pathid(path)
 
@@ -310,9 +309,9 @@ class MySQLScanner(Scanner):
             return
         except OSError as e:
             return
-        self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,mtime,size,hashid,scanid) "
-                                "VALUES (%s,%s,%s,%s,%s)".format(
-                                self.args.db) , vals=[int(pathid), int(mtime),
+        self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,rootid,mtime,size,hashid,scanid) "
+                                "VALUES (%s,%s,%s,%s,%s,%s)".format(
+                                self.args.db) , vals=[int(pathid), int(rootid), int(mtime),
                                 int(file_size), int(hashid), int(self.scanid)])
         
         if self.args.vfiles:
