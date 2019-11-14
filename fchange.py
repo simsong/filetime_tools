@@ -65,50 +65,6 @@ MYSQL_SCHEMA = \
 DROP TABLE IF EXISTS `filetime_tools`.metadata;
 CREATE TABLE  `filetime_tools`.metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255) NOT NULL);
 
-DROP TABLE IF EXISTS `filetime_tools`.dirnames;
-CREATE TABLE  `filetime_tools`.dirnames (dirnameid INTEGER PRIMARY KEY AUTO_INCREMENT,dirname TEXT(65536));
-CREATE UNIQUE INDEX  dirnames_idx2 ON `filetime_tools`.dirnames (dirname(700));
-
-DROP TABLE IF EXISTS `filetime_tools`.filenames;
-CREATE TABLE  `filetime_tools`.filenames (filenameid INTEGER PRIMARY KEY AUTO_INCREMENT,filename TEXT(65536));
-CREATE INDEX  filenames_idx2 ON `filetime_tools`.filenames (filename(700));
-
-DROP TABLE IF EXISTS `filetime_tools`.paths;
-CREATE TABLE  `filetime_tools`.paths (pathid INTEGER PRIMARY KEY AUTO_INCREMENT,
-       dirnameid INTEGER REFERENCES `filetime_tools`.dirnames(dirnameid),
-       filenameid INTEGER REFERENCES `filetime_tools`.filenames(filenameid));
-CREATE INDEX  paths_idx2 ON `filetime_tools`.paths(dirnameid);
-CREATE INDEX  paths_idx3 ON `filetime_tools`.paths(filenameid);
-
-DROP TABLE IF EXISTS `filetime_tools`.hashes;
-CREATE TABLE  `filetime_tools`.hashes (hashid INTEGER PRIMARY KEY AUTO_INCREMENT,hash TEXT(65536) NOT NULL);
-CREATE INDEX  hashes_idx2 ON `filetime_tools`.hashes( hash(700));
-
-DROP TABLE IF EXISTS `filetime_tools`.scans;
-CREATE TABLE  `filetime_tools`.scans (scanid INTEGER PRIMARY KEY AUTO_INCREMENT,time DATETIME NOT NULL UNIQUE,duration INTEGER);
-CREATE INDEX  scans_idx1 ON `filetime_tools`.scans(scanid);
-CREATE INDEX  scans_idx2 ON `filetime_tools`.scans(time);
-
-DROP TABLE IF EXISTS `filetime_tools`.files;
-CREATE TABLE  `filetime_tools`.files (fileid INTEGER PRIMARY KEY AUTO_INCREMENT,
-                                  pathid INTEGER REFERENCES paths(pathid),
-                                  mtime INTEGER NOT NULL, 
-                                  size INTEGER NOT NULL, 
-                                  hashid INTEGER REFERENCES hashes(hashid), 
-                                  scanid INTEGER REFERENCES scans(scanid));
-CREATE INDEX  files_idx1 ON `filetime_tools`.files(pathid);
-CREATE INDEX  files_idx2 ON `filetime_tools`.files(mtime);
-CREATE INDEX  files_idx3 ON `filetime_tools`.files(size);
-CREATE INDEX  files_idx4 ON `filetime_tools`.files(hashid);
-CREATE INDEX  files_idx5 ON `filetime_tools`.files(scanid);
-CREATE INDEX  files_idx6 ON `filetime_tools`.files(scanid,hashid);
-"""
-
-MYSQLS3_SCHEMA = \
-    """
-DROP TABLE IF EXISTS `filetime_tools`.metadata;
-CREATE TABLE  `filetime_tools`.metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255) NOT NULL);
-
 DROP TABLE IF EXISTS `filetime_tools`.roots;
 CREATE TABLE `filetime_tools`.roots (rootid INTEGER PRIMARY KEY AUTO_INCREMENT, rootdir VARCHAR(255) NOT NULL);
 
@@ -132,20 +88,23 @@ CREATE TABLE  `filetime_tools`.hashes (hashid INTEGER PRIMARY KEY AUTO_INCREMENT
 CREATE INDEX  hashes_idx2 ON `filetime_tools`.hashes( hash(700));
 
 DROP TABLE IF EXISTS `filetime_tools`.scans;
-CREATE TABLE  `filetime_tools`.scans (scanid INTEGER PRIMARY KEY AUTO_INCREMENT,time DATETIME NOT NULL UNIQUE,duration INTEGER);
+CREATE TABLE  `filetime_tools`.scans (scanid INTEGER PRIMARY KEY AUTO_INCREMENT,
+                                      rootid INTEGER REFERENCES roots(rootid),
+                                      time DATETIME NOT NULL UNIQUE,
+                                      duration INTEGER);
 CREATE INDEX  scans_idx1 ON `filetime_tools`.scans(scanid);
 CREATE INDEX  scans_idx2 ON `filetime_tools`.scans(time);
 
 DROP TABLE IF EXISTS `filetime_tools`.files;
 CREATE TABLE  `filetime_tools`.files (fileid INTEGER PRIMARY KEY AUTO_INCREMENT,
-                                  rootid INTEGER REFERENCES roots(rootid),
                                   pathid INTEGER REFERENCES paths(pathid),
-                                  mtime DATETIME NOT NULL, 
+                                  rootid INTEGER REFERENCES roots(rootid),
+                                  mtime INTEGER NOT NULL, 
                                   size INTEGER NOT NULL, 
                                   hashid INTEGER REFERENCES hashes(hashid), 
                                   scanid INTEGER REFERENCES scans(scanid));
-CREATE INDEX  files_idx1 ON `filetime_tools`.files(rootid);
-CREATE INDEX  files_idx2 ON `filetime_tools`.files(pathid);
+CREATE INDEX  files_idx1 ON `filetime_tools`.files(pathid);
+CREATE INDEX  files_idx2 ON `filetime_tools`.files(rootid);
 CREATE INDEX  files_idx3 ON `filetime_tools`.files(mtime);
 CREATE INDEX  files_idx4 ON `filetime_tools`.files(size);
 CREATE INDEX  files_idx5 ON `filetime_tools`.files(hashid);
@@ -466,9 +425,9 @@ class MySQLFileChangeManager(FileChangeManager):
         super().__init__(conn)
 
     def list_scans(self):
-        results = self.conn.csfr(self.auth, "SELECT scanid, time FROM `{}`.scans".format(self.database))
-        for (scanid, time) in results:
-            print(scanid, time)
+        results = self.conn.csfr(self.auth, "SELECT scanid, time, rootid, rootdir FROM `{db}`.scans NATURAL JOIN `{db}`.roots".format(db=self.database))
+        for (scanid, time, rootid, rootdir) in results:
+            print(scanid, rootdir, time)
 
     def last_scan(self):
         return DBMySQL.execselect(self.conn, "SELECT MAX(scanid) from `{}`.scans".format(self.database))[0]
@@ -646,6 +605,12 @@ class MySQLFileChangeManager(FileChangeManager):
 
     def report_dups(self, b):
         duplicate_bytes = 0
+
+        result = self.conn.csfr(self.auth,
+                                "SELECT scanid, rootid, rootdir FROM `{db}`.scans NATURAL JOIN `{db}`.roots WHERE scanid=%s".format(db=self.database), vals=[b])[0]
+        rootdir = result[2]
+        print("ROOT DIR: ", rootdir)
+
         for dups in self.get_duplicate_files(b):
             if dups[0]["size"] > args.dupsize:
                 print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
@@ -778,7 +743,7 @@ if __name__ == "__main__":
     parser.add_argument("--db", help="Specify database location", default="das_ftt") # needs to be removed (outdated)
     parser.add_argument("--config", help="Specify configuration file", default="default.ini")
     parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
-    parser.add_argument("--root", help="List the root in the DB", action='store_true') # initial root? (outdated)
+    parser.add_argument("--root", help="List the root in the DB", action='store_true') # (outdated)
     parser.add_argument("--roots", help="List all roots in the DB", action='store_true') # initial root?
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
@@ -796,13 +761,12 @@ if __name__ == "__main__":
     auth = None
 
     if args.create:
-        if args.create.startswith("s3://"):
-            try:
-                auth = DBMySQLAuth.FromEnv(args.config)
-                create_mysql_database(auth, args.create, MYSQLS3_SCHEMA)
-                print("Created {}  initial root: {}".format(args.db, args.create))
-            except Exception as e:
-                print("An error occured when attempting to create the database: ", e)
+        try:
+            auth = DBMySQLAuth.FromEnv(args.config)
+            create_mysql_database(auth, args.create, MYSQL_SCHEMA)
+            print("Created {}  initial root: {}".format(args.db, args.create))
+        except Exception as e:
+            print("An error occured when attempting to create the database: ", e)
     # elif args.create:
         # create an sqlite3 db
         # pass
@@ -830,9 +794,11 @@ if __name__ == "__main__":
 
     if args.addroot:
         fchange.add_root(args.addroot)
+        print("Added root: ", args.addroot)
 
     if args.delroot:
         fchange.del_root(args.delroot)
+        print("Deleted root: ", args.delroot)
 
     if args.scans:
         fchange.list_scans()

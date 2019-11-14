@@ -9,6 +9,7 @@ import os
 import sys
 import zipfile
 import time
+from datetime import datetime
 from dbfile import DBFile, SLGSQL
 from ctools.dbfile import *
 import ctools.s3
@@ -119,7 +120,7 @@ class Scanner(object):
         return self.get_hashid( hexdigest )
         
 
-    def insert_file(self, *, path, mtime, file_size, handle=None, hexdigest=None):
+    def insert_file(self, *, root, path, mtime, file_size, handle=None, hexdigest=None):
         """@mtime in time_t"""
         pathid = self.get_pathid(path)
 
@@ -144,16 +145,15 @@ class Scanner(object):
             st = os.stat(path)
         except FileNotFoundError as e:
             return
-
         self.insert_file(path=path, root=root, mtime=st.st_mtime, file_size=st.st_size, handle=open(path,"rb"))
 
     def process_zipfile(self, root, path, zf):
         """Scan a zip file and insert it into the database"""
         for zi in zf.infolist():
             mtime = time.mktime(zi.date_time + (0,0,0))
-            self.insert_file(path=path+"/"+zi.filename, root=root, mtime=mtime, file_size=zi.file_size, handle=zf.open(zi.filename,"r"))
+            self.insert_file(root=root, path=path+"/"+zi.filename, mtime=mtime, file_size=zi.file_size, handle=zf.open(zi.filename,"r"))
 
-    def ingest_start(self, root):
+    def ingest_start(self):
         print("ingest_start")
         self.scanid = self.get_scanid(timet_iso())
 
@@ -241,9 +241,10 @@ class MySQLScanner(Scanner):
         for row in result:
             return row[0]
 
-    def get_scanid(self, now):
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.scans (time) VALUES (%s)".format(self.args.db),vals=[now])
-        result = self.conn.csfr(self.auth, "SELECT scanid FROM `{}`.scans WHERE time='{}' LIMIT 1".format(self.args.db,now))
+    def get_scanid(self, now, root):
+        rootid = self.conn.csfr(self.auth, "SELECT rootid FROM `{}`.roots WHERE rootdir=%s LIMIT 1".format(self.args.db), vals=[root])[0][0]
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.scans (time, rootid) VALUES (%s, %s)".format(self.args.db),vals=[now, rootid])
+        result = self.conn.csfr(self.auth, "SELECT scanid FROM `{}`.scans WHERE time='{}' AND rootid='{}' LIMIT 1".format(self.args.db,now, rootid))
         for row in result:
             return row[0]
 
@@ -257,16 +258,20 @@ class MySQLScanner(Scanner):
 
         # filename
         self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.filenames (filename) VALUES (%s)".format(self.args.db), vals=[filename])
-        fileids = self.conn.csfr(self.auth, "SELECT filenameid FROM`{}`.filenames WHERE filename=%s LIMIT 1".format(self.args.db), vals=[filename])
+        fileids = self.conn.csfr(self.auth, "SELECT filenameid FROM `{}`.filenames WHERE filename=%s LIMIT 1".format(self.args.db), vals=[filename])
         for fileid in fileids:
             filenameid = fileid[0]
 
         # pathid
         self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.paths (dirnameid, filenameid) VALUES (%s,%s)".format(self.args.db), vals=[dirnameid, filenameid])
-        pathids = self.conn.csfr(self.auth, "SELECT pathid FROM`{}`.paths WHERE dirnameid=%s and filenameid=%s LIMIT 1".format(self.args.db),vals=[dirnameid,filenameid])
+        pathids = self.conn.csfr(self.auth, "SELECT pathid FROM `{}`.paths WHERE dirnameid=%s and filenameid=%s LIMIT 1".format(self.args.db),vals=[dirnameid,filenameid])
         for pathid in pathids:
             return pathid[0]
         raise RuntimeError(f"no pathid found for {dirnameid},{filenameid}")
+
+    def get_rootid(self, rootname):
+        result = self.conn.csfr(self.auth, "SELECT rootid FROM `{}`.roots WHERE rootdir=%s LIMIT 1".format(self.args.db), vals=[rootname])
+        return result[0][0]
 
     def get_file_hashid(self, *, f=None, pathname=None, file_size, pathid=None, mtime, hexdigest=None):
         """Given an open file or a filename, Return the MD5 hexdigest."""
@@ -302,6 +307,7 @@ class MySQLScanner(Scanner):
     def insert_file(self, *, path, root, mtime, file_size, handle=None, hexdigest=None):
         """@mtime in time_t"""
         pathid = self.get_pathid(path)
+        rootid = self.get_rootid(root)
 
         try:
             hashid = self.get_file_hashid(pathid=pathid, mtime=mtime, file_size=file_size, f=handle, hexdigest=hexdigest)
@@ -311,11 +317,15 @@ class MySQLScanner(Scanner):
             return
         self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,rootid,mtime,size,hashid,scanid) "
                                 "VALUES (%s,%s,%s,%s,%s,%s)".format(
-                                self.args.db) , vals=[int(pathid), int(rootid), int(mtime),
+                                self.args.db) , vals=[int(pathid), int(rootid), mtime,
                                 int(file_size), int(hashid), int(self.scanid)])
         
         if self.args.vfiles:
             print("{} {}".format(path, file_size))
+
+    def ingest_start(self, root):
+        print("ingest_start")
+        self.scanid = self.get_scanid(timet_iso(), root)
 
     def ingest_walk(self, root):
             """Walk the local file system and go inside ZIP files"""
@@ -330,12 +340,12 @@ class MySQLScanner(Scanner):
                         #
                         # Get full path and process
                         filename_path = os.path.join(dirpath, filename)
-                        self.process_filepath(filename_path)
+                        self.process_filepath(root, filename_path)
 
                         # See if this is a zipfile. If so, process it
                         zf = open_zipfile(filename_path)
                         if zf:
-                            self.process_zipfile( filename_path, zf)
+                            self.process_zipfile(root, filename_path, zf)
                         self.filecount += 1
                         if (self.args.limit is not None) and (self.filecount > self.args.limit):
                             return
@@ -353,6 +363,13 @@ class MySQLScanner(Scanner):
         print("Total directories scanned:     {}".format(self.dircount))
         print("Total time: {}".format(int(self.t1 - self.t0)))
 
+    def ingest(self, root):
+        """Ingest everything from the root"""
+        self.ingest_start(root)
+        self.t0 = time.time()
+        self.ingest_walk(root)
+        self.t1 = time.time()
+        self.ingest_done(root)
 
 
 class MySQLS3Scanner(MySQLScanner):
@@ -361,9 +378,10 @@ class MySQLS3Scanner(MySQLScanner):
         super().__init__(*args,**kwargs)
 
 
-    def insert_file(self, *, path, mtime, file_size, handle=None, hexdigest=None):
+    def insert_file(self, *, path, root, mtime, file_size, handle=None, hexdigest=None):
         """@mtime in time_t"""
         pathid = self.get_pathid(path)
+        rootid = self.get_rootid(root)
 
         try:
             hashid = self.get_file_hashid(pathid=pathid, mtime=mtime, file_size=file_size, f=handle, hexdigest=hexdigest)
@@ -371,9 +389,9 @@ class MySQLS3Scanner(MySQLScanner):
             return
         except OSError as e:
             return
-        self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,mtime,size,hashid,scanid) "
-                                "VALUES (%s,%s,%s,%s,%s)".format(
-                                self.args.db), vals=[int(pathid), mtime.replace('Z', '').replace('T', ' '),
+        self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,rootid,mtime,size,hashid,scanid) "
+                                "VALUES (%s,%s,%s,%s,%s,%s)".format(
+                                self.args.db), vals=[int(pathid), int(rootid), int(mtime),
                                 int(file_size), int(hashid), int(self.scanid)])
         
         if self.args.vfiles:
@@ -390,8 +408,8 @@ class MySQLS3Scanner(MySQLScanner):
                 #   'StorageClass': 'STANDARD', 
                 #   'Key': 'a/b/c/whatever.txt', 
                 #   'Size': 31838630}
-
-                self.insert_file( path=obj['Key'], mtime=obj['LastModified'][0:19], file_size=obj['Size'], hexdigest=obj['ETag'] )
+                mtime = int(datetime.datetime.strptime(obj['LastModified'][0:19], '%Y-%m-%dT%H:%M:%S').timestamp())
+                self.insert_file( path=obj['Key'], root=root, mtime=mtime, file_size=obj['Size'], hexdigest=obj['ETag'] )
                 self.filecount += 1
                 if (self.args.limit is not None) and (self.filecount > self.args.limit):
                     return
