@@ -4,17 +4,13 @@
 # File change detector
 
 __version__ = '0.0.1'
-import json
 import os.path
-import re
 import sqlite3
 from abc import ABC, abstractmethod
 
 import scanner
 from ctools.dbfile import *
 from ctools.tydoc import *
-import pymysql
-# from dbfile import DBFile, SLGSQL
 
 CACHE_SIZE = 2000000
 SQL_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
@@ -187,11 +183,11 @@ class FileChangeManager(ABC):
     @abstractmethod
     def del_root(self, root):
         pass
-    
 
     # @abstractmethod
     # def create_database(self, name, root):
     #     pass
+
 
 class SQLite3FileChangeManager(FileChangeManager):
     def __init__(self, conn):
@@ -207,40 +203,35 @@ class SQLite3FileChangeManager(FileChangeManager):
     def last_scan(self):
         return self.conn.execselect(conn, "SELECT MAX(scanid) FROM scans", ())[0]
 
-
     def get_all_files(self, scan1):
         """Files in scan scan1"""
         c = self.conn.cursor()
         c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename, fileid, mtime, size "
-                "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-                "WHERE scanid=?", (scan1,))
+                  "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+                  "WHERE scanid=?", (scan1,))
         return (DBFile(f) for f in c)
-
 
     def get_new_files(conn, scan0, scan1):
         """Files in scan scan1 that are not in scan scan0"""
         c = conn.cursor()
         c.execute("SELECT fileid, pathid, dirnameid, dirname, filenameid, filename, mtime, size "
-                "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-                "WHERE scanid=? AND pathid NOT IN (SELECT pathid FROM files WHERE scanid=?)", (scan1, scan0))
+                  "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+                  "WHERE scanid=? AND pathid NOT IN (SELECT pathid FROM files WHERE scanid=?)", (scan1, scan0))
         return (DBFile(f) for f in c)
-
 
     def deleted_files(conn, scan0, scan1):
         """Files in scan scan1 that are not in scan0"""
         return get_new_files(conn, scan1, scan0)
 
-
     def changed_files(conn, scan0, scan1):
         """Files that were changed between scan0 and scan1"""
         c = conn.cursor()
         c.execute("SELECT a.pathid as pathid, a.hashid, b.hashid FROM " +
-                "( SELECT pathid, hashid, scanid FROM files WHERE scanid=?) AS 'a' " +
-                "JOIN (SELECT pathid, hashid, scanid FROM FILES WHERE scanid=?) as 'b' " +
-                "ON a.pathid=b.pathid WHERE a.hashid != b.hashid",
-                (scan0, scan1))
+                  "( SELECT pathid, hashid, scanid FROM files WHERE scanid=?) AS 'a' " +
+                  "JOIN (SELECT pathid, hashid, scanid FROM FILES WHERE scanid=?) as 'b' " +
+                  "ON a.pathid=b.pathid WHERE a.hashid != b.hashid",
+                  (scan0, scan1))
         return (DBFile(f) for f in c)
-
 
     def get_duplicate_files(conn, scan0):
         """Return a generator for the duplicate files at scan0.
@@ -248,8 +239,8 @@ class SQLite3FileChangeManager(FileChangeManager):
         c = conn.cursor()
         d = conn.cursor()
         c.execute('SELECT hashid, ct, size FROM '
-                '(SELECT hashid, count(*) AS ct, size FROM files WHERE scanid=? GROUP BY hashid) '
-                'WHERE ct>1 AND size>? ORDER BY 3 DESC;', (scan0, args.dupsize))
+                  '(SELECT hashid, count(*) AS ct, size FROM files WHERE scanid=? GROUP BY hashid) '
+                  'WHERE ct>1 AND size>? ORDER BY 3 DESC;', (scan0, args.dupsize))
         for (hashid, ct, size) in c:
             ret = []
             d.execute(
@@ -257,7 +248,6 @@ class SQLite3FileChangeManager(FileChangeManager):
                 "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
                 "WHERE scanid=? AND hashid=?", (scan0, hashid,))
             yield [DBFile(f) for f in d]
-
 
     def renamed_files(conn, scan1, scan2):
         """Return a generator for the duplicate files at scan0.
@@ -267,7 +257,7 @@ class SQLite3FileChangeManager(FileChangeManager):
         def get_singletons(conn, scanid):
             c = conn.cursor()
             c.execute('SELECT hashID, pathid, count(*) AS ct '
-                    'FROM files WHERE scanid=? GROUP BY hashid HAVING ct=1', (scanid,))
+                      'FROM files WHERE scanid=? GROUP BY hashid HAVING ct=1', (scanid,))
             return c
 
         pairs_in_scan1 = set()
@@ -279,8 +269,7 @@ class SQLite3FileChangeManager(FileChangeManager):
         for (hashID, path2, count) in get_singletons(conn, scan2):
             if hashID in path1_for_hash and (hashID, path2) not in pairs_in_scan1:
                 yield (DBFile({"hashid": hashID, "pathid": path1_for_hash[hashID]}),
-                    DBFile({"hashid": hashID, "pathid": path2}))
-
+                       DBFile({"hashid": hashID, "pathid": path2}))
 
     def report(conn, a, b):
         atime = SLGSQL.execselect(conn, "SELECT time FROM scans WHERE scanid=?", (a,))[0]
@@ -313,20 +302,18 @@ class SQLite3FileChangeManager(FileChangeManager):
                 print("    {}".format(dup.get_path(conn)))
         print("\n-----------")
 
-
-    def report_dups(conn,scan0):
+    def report_dups(conn, scan0):
         import codecs
-        with codecs.open(args.out,mode="w",encoding='utf-8') as out:
+        with codecs.open(args.out, mode="w", encoding='utf-8') as out:
             out.write("Duplicate files:\n")
             total_wasted = 0
             for dups in duplicate_files(conn, scan0):
                 out.write("Filesize: {:,}  Count: {}\n".format(dups[0].size, len(dups)))
                 for dup in dups:
-                    out.write("   , " + os.path.join(dup.dirname,dup.filename) + "\n")
-                total_wasted += dups[0].size * (len(dups)-1)
+                    out.write("   , " + os.path.join(dup.dirname, dup.filename) + "\n")
+                total_wasted += dups[0].size * (len(dups) - 1)
             out.write("-----------\n")
-            out.write("Total wasted space: {}MB".format(total_wasted/1000000))
-
+            out.write("Total wasted space: {}MB".format(total_wasted / 1000000))
 
     def report_dups(conn, b):
         duplicate_bytes = 0
@@ -351,7 +338,7 @@ class SQLite3FileChangeManager(FileChangeManager):
 
         def backfill(f):
             if (f.fileid == None or f.dirnameid == None or f.filenameid == None
-                or f.size == None or f.mtime == None):
+                    or f.size == None or f.mtime == None):
                 print("f:", f)
                 exit(1)
             if f.fileid not in fileids:
@@ -401,10 +388,8 @@ class SQLite3FileChangeManager(FileChangeManager):
             dump_dictionary(fp, "filenameids", filenameids)
             dump_dictionary(fp, "fileids", fileids)
 
-
     def get_root(conn):
         return SLGSQL.execselect(conn, "SELECT value FROM metadata WHERE key='root'")[0]
-
 
     # def create_database(name, root):
     #     if os.path.exists(name):
@@ -425,7 +410,9 @@ class MySQLFileChangeManager(FileChangeManager):
         super().__init__(conn)
 
     def list_scans(self):
-        results = self.conn.csfr(self.auth, "SELECT scanid, time, rootid, rootdir FROM `{db}`.scans NATURAL JOIN `{db}`.roots".format(db=self.database))
+        results = self.conn.csfr(self.auth,
+                                 "SELECT scanid, time, rootid, rootdir FROM `{db}`.scans NATURAL JOIN `{db}`.roots".format(
+                                     db=self.database))
         for (scanid, time, rootid, rootdir) in results:
             print(scanid, rootdir, time)
 
@@ -434,23 +421,26 @@ class MySQLFileChangeManager(FileChangeManager):
 
     def get_all_files(self, scan0):
         results = self.conn.csfr(self.auth,
-        "SELECT fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime "
-        "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-        "WHERE scanid={}".format(self.database, scan0))
+                                 "SELECT fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime "
+                                 "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+                                 "WHERE scanid={}".format(self.database, scan0))
         for fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime in results:
-            yield {"fileid":fileid, "pathid":pathid, "rootid":rootid, "size":size,
-            "dirnameid":dirnameid, "dirname":dirname, "filenameid":filenameid,
-            "filename":filename, "mtime":mtime }
+            yield {"fileid": fileid, "pathid": pathid, "rootid": rootid, "size": size,
+                   "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid,
+                   "filename": filename, "mtime": mtime}
 
     def get_new_files(self, scan0, scan1):
         """Files in scan scan1 that are not in scan scan0"""
         ret = []
-        results = self.conn.csfr(self.auth, "SELECT fileid, pathid, size,  dirnameid, dirname, filenameid, filename, mtime "
-            "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-            "WHERE scanid={} AND pathid NOT IN (SELECT pathid FROM files WHERE scanid={})".format(self.database, scan1, scan0))
+        results = self.conn.csfr(self.auth,
+                                 "SELECT fileid, pathid, size,  dirnameid, dirname, filenameid, filename, mtime "
+                                 "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+                                 "WHERE scanid={} AND pathid NOT IN (SELECT pathid FROM files WHERE scanid={})".format(
+                                     self.database, scan1, scan0))
         for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in results:
-            ret.append({"fileid":fileid, "pathid":pathid, "size":size,
-                "dirnameid":dirnameid, "dirname":dirname, "filenameid":filenameid, "filename":filename, "mtime":mtime})
+            ret.append({"fileid": fileid, "pathid": pathid, "size": size,
+                        "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid, "filename": filename,
+                        "mtime": mtime})
         return ret
 
     def deleted_files(self, scan0, scan1):
@@ -460,17 +450,23 @@ class MySQLFileChangeManager(FileChangeManager):
         """Files that were changed between scan0 and scan1"""
         ret = []
         results = self.conn.csfr(self.auth, "SELECT a.pathid as pathid, a.hashid, b.hashid FROM "
-                "(SELECT pathid, hashid, scanid FROM `{db}`.files WHERE scanid={scan0}) as a "
-                "JOIN (SELECT pathid, hashid, scanid FROM `{db}`.FILES WHERE scanid={scan1}) as b "
-                "ON a.pathid=b.pathid WHERE a.hashid != b.hashid".format(db=self.database, scan0=scan0, scan1=scan1))
+                                            "(SELECT pathid, hashid, scanid FROM `{db}`.files WHERE scanid={scan0}) as a "
+                                            "JOIN (SELECT pathid, hashid, scanid FROM `{db}`.FILES WHERE scanid={scan1}) as b "
+                                            "ON a.pathid=b.pathid WHERE a.hashid != b.hashid".format(db=self.database,
+                                                                                                     scan0=scan0,
+                                                                                                     scan1=scan1))
         for pathid, ahashid, bhashid in results:
-            dirnameid, filenameid = self.conn.csfr(self.auth, 
-            "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(self.database, pathid))[0]
+            dirnameid, filenameid = self.conn.csfr(self.auth,
+                                                   "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(
+                                                       self.database, pathid))[0]
             dirname = self.conn.csfr(self.auth,
-            "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database, dirnameid))[0][0]
+                                     "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database,
+                                                                                                   dirnameid))[0][0]
             filename = self.conn.csfr(self.auth,
-            "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database, filenameid))[0][0]
-            yield {"dirname":dirname, "filename":filename}
+                                      "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database,
+                                                                                                       filenameid))[0][
+                0]
+            yield {"dirname": dirname, "filename": filename}
         #     ret.append({"pathid":pathid, "ahashid":ahashid, "bhashid":bhashid})
         # return ret
 
@@ -478,18 +474,20 @@ class MySQLFileChangeManager(FileChangeManager):
         """Return a generator for the duplicate files at scan0.
         Returns a list of a list of File objects, sorted by size"""
         cresult = self.conn.csfr(self.auth, 'SELECT hashid, ct, size FROM '
-            '(SELECT hashid, count(hashid) AS ct, size FROM `{dbname}`.files WHERE scanid={scanid} GROUP BY hashid, size) as T '
-            'WHERE ct>1 AND size>{dupsize} ORDER BY 3 DESC;'.format(dbname=self.database, scanid=scan0, dupsize=args.dupsize))
+                                            '(SELECT hashid, count(hashid) AS ct, size FROM `{dbname}`.files WHERE scanid={scanid} GROUP BY hashid, size) as T '
+                                            'WHERE ct>1 AND size>{dupsize} ORDER BY 3 DESC;'.format(
+            dbname=self.database, scanid=scan0, dupsize=args.dupsize))
         for hashid, ct, size in cresult:
             ret = []
             dresult = self.conn.csfr(self.auth,
-                'SELECT fileid,pathid,size,dirnameid,dirname,filenameid,filename,mtime '
-                'FROM `{dbname}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames '
-                'WHERE scanid={scanid} AND hashid={hashid}'.format(dbname=self.database, scanid=scan0, hashid=hashid))
+                                     'SELECT fileid,pathid,size,dirnameid,dirname,filenameid,filename,mtime '
+                                     'FROM `{dbname}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames '
+                                     'WHERE scanid={scanid} AND hashid={hashid}'.format(dbname=self.database,
+                                                                                        scanid=scan0, hashid=hashid))
             for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in dresult:
-                ret.append({"fileid":fileid, "pathid":pathid, "size":size,
-                "dirnameid":dirnameid, "dirname":dirname, "filenameid":filenameid, 
-                "filename":filename, "mtime":mtime})
+                ret.append({"fileid": fileid, "pathid": pathid, "size": size,
+                            "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid,
+                            "filename": filename, "mtime": mtime})
             yield ret
 
     # TODO: renamed files only tracks last scanned file. Will consider any file containing the same information as renamed if they have different names.
@@ -500,7 +498,8 @@ class MySQLFileChangeManager(FileChangeManager):
 
         def get_singletons(scanid):
             results = self.conn.csfr(self.auth, 'SELECT hashID, pathid, count(*) AS ct '
-                'FROM `{}`.files WHERE scanid={} GROUP BY hashid, pathid HAVING ct=1'.format(self.database, scanid))
+                                                'FROM `{}`.files WHERE scanid={} GROUP BY hashid, pathid HAVING ct=1'.format(
+                self.database, scanid))
             return results
 
         pairs_in_scan0 = set()
@@ -511,23 +510,31 @@ class MySQLFileChangeManager(FileChangeManager):
 
         for (hashID, path2, count) in get_singletons(scan1):
             if hashID in path1_for_hash and (hashID, path2) not in pairs_in_scan0:
-                dirnameid1, filenameid1 = self.conn.csfr(self.auth, 
-                "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(self.database, path1_for_hash[hashID]))[0]
+                dirnameid1, filenameid1 = self.conn.csfr(self.auth,
+                                                         "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(
+                                                             self.database, path1_for_hash[hashID]))[0]
                 dirname1 = self.conn.csfr(self.auth,
-                "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database, dirnameid1))[0][0]
+                                          "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database,
+                                                                                                        dirnameid1))[0][
+                    0]
                 filename1 = self.conn.csfr(self.auth,
-                "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database, filenameid1))[0][0]
-                dirnameid2, filenameid2 = self.conn.csfr(self.auth, 
-                "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(self.database, path2))[0]
+                                           "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(
+                                               self.database, filenameid1))[0][0]
+                dirnameid2, filenameid2 = self.conn.csfr(self.auth,
+                                                         "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(
+                                                             self.database, path2))[0]
                 dirname2 = self.conn.csfr(self.auth,
-                "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database, dirnameid2))[0][0]
+                                          "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database,
+                                                                                                        dirnameid2))[0][
+                    0]
                 filename2 = self.conn.csfr(self.auth,
-                "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database, filenameid2))[0][0]
-                yield {"dirname1":dirname1, "filename1":filename1, "dirname2":dirname2, "filename2":filename2}
-                
+                                           "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(
+                                               self.database, filenameid2))[0][0]
+                yield {"dirname1": dirname1, "filename1": filename1, "dirname2": dirname2, "filename2": filename2}
+
                 # yield ({"hashid":hashID, "pathid":path1_for_hash[hashID]},
                 #         {"hashid": hashID, "pathid": path2})
-    
+
     def report(self, a, b):
         docs = None
         if args.out:
@@ -539,7 +546,7 @@ class MySQLFileChangeManager(FileChangeManager):
             atime = 0
         else:
             atime = atime[0]
-        
+
         if btime is None:
             btime = 0
         else:
@@ -569,7 +576,6 @@ class MySQLFileChangeManager(FileChangeManager):
             if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
             print(os.path.join(f["dirname"], f["filename"]))
 
-
         print()
         print("Renamed files:")
         if args.out: docs.h1("Renamed files:")
@@ -584,30 +590,31 @@ class MySQLFileChangeManager(FileChangeManager):
             if args.out: docs.p("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
             print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
             for dup in dups:
-                if args.out: docs.p("    {}".format(os.path.join(dup["dirname"],dup["filename"])))
-                print("    {}".format(os.path.join(dup["dirname"],dup["filename"])))
+                if args.out: docs.p("    {}".format(os.path.join(dup["dirname"], dup["filename"])))
+                print("    {}".format(os.path.join(dup["dirname"], dup["filename"])))
         print("\n-----------")
         if args.out: docs.save(args.out.split('/')[-1] + ".html")
 
     def report_dups(self, scan0):
         import codecs
-        with codecs.open(args.out,mode="w",encoding='utf8mb4') as out:
+        with codecs.open(args.out, mode="w", encoding='utf8mb4') as out:
             out.write("Duplicate files:\n")
             total_wasted = 0
             for dups in self.get_duplicate_files(conn, scan0):
                 out.write("Filesize: {:,}  Count: {}\n".format(dups[0].size, len(dups)))
                 for dup in dups:
                     print(dup)
-                    out.write("   , " + os.path.join(dup.dirname,dup.filename) + "\n")
-                total_wasted += dups[0].size * (len(dups)-1)
+                    out.write("   , " + os.path.join(dup.dirname, dup.filename) + "\n")
+                total_wasted += dups[0].size * (len(dups) - 1)
             out.write("-----------\n")
-            out.write("Total wasted space: {}MB".format(total_wasted/1000000))
+            out.write("Total wasted space: {}MB".format(total_wasted / 1000000))
 
     def report_dups(self, b):
         duplicate_bytes = 0
 
         result = self.conn.csfr(self.auth,
-                                "SELECT scanid, rootid, rootdir FROM `{db}`.scans NATURAL JOIN `{db}`.roots WHERE scanid=%s".format(db=self.database), vals=[b])[0]
+                                "SELECT scanid, rootid, rootdir FROM `{db}`.scans NATURAL JOIN `{db}`.roots WHERE scanid=%s".format(
+                                    db=self.database), vals=[b])[0]
         rootdir = result[2]
         print("ROOT DIR: ", rootdir)
 
@@ -620,7 +627,6 @@ class MySQLFileChangeManager(FileChangeManager):
                 duplicate_bytes += dups[0]["size"] * (len(dups) - 1)
         print("\n-----------")
         print("Total space duplicated by files larger than {:,}: {:,}".format(args.dupsize, duplicate_bytes))
-        
 
     def jreport(self):
         from collections import defaultdict
@@ -632,17 +638,19 @@ class MySQLFileChangeManager(FileChangeManager):
 
         def backfill(f):
             if (f['fileid'] == None or f['dirnameid'] == None or f['filenameid'] == None
-                or f['size'] == None or f['mtime'] == None):
+                    or f['size'] == None or f['mtime'] == None):
                 print("f:", f)
                 exit(1)
             if f['fileid'] not in fileids:
                 fileids[f['fileid']] = (f['dirnameid'], f['filenameid'], f['size'], f['mtime'])
             if f['dirnameid'] not in dirnameids:
                 dirnameids[f['dirnameid']] = self.conn.csfr(self.auth,
-                "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database, f['dirnameid']))
+                                                            "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(
+                                                                self.database, f['dirnameid']))
             if f['filenameid'] not in filenameids:
                 filenameids[f['filenameid']] = self.conn.csfr(self.auth,
-                "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database, f['filenameid']))
+                                                              "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(
+                                                                  self.database, f['filenameid']))
 
         print("all_files")
         all_files = defaultdict(list)
@@ -673,7 +681,8 @@ class MySQLFileChangeManager(FileChangeManager):
             def dump_dictionary(fp, name, val):
                 fp.write("var " + name + " = {};\n")
                 for name in val:
-                    fp.write('{}[{}] = {};\n'.format(name, json.dumps(name), json.dumps(val[name], indent=4, sort_keys=True, default=str)))
+                    fp.write('{}[{}] = {};\n'.format(name, json.dumps(name),
+                                                     json.dumps(val[name], indent=4, sort_keys=True, default=str)))
 
             dump_dictionary(fp, "all_files", all_files)
             dump_dictionary(fp, "new_files", new_files)
@@ -691,18 +700,17 @@ class MySQLFileChangeManager(FileChangeManager):
         roots = self.conn.csfr(auth, "SELECT rootdir FROM `{}`.roots".format(self.database))
         return roots
 
-
     def add_root(self, root):
         try:
             self.conn.csfr(self.auth,
-                            "INSERT IGNORE INTO `{}`.roots (rootdir) VALUES ('{}')".format(self.database, root))
+                           "INSERT IGNORE INTO `{}`.roots (rootdir) VALUES ('{}')".format(self.database, root))
         except Exception as e:
             print("Could not add root: {} \n ".format(root), e)
 
     def del_root(self, root):
         try:
             self.conn.csfr(self.auth,
-                            "DELETE IGNORE FROM `{}`.roots WHERE rootdir='{}'".format(self.database, root))
+                           "DELETE IGNORE FROM `{}`.roots WHERE rootdir='{}'".format(self.database, root))
         except Exception as e:
             print("Could not delete root: {} \n ".format(root), e)
 
@@ -717,7 +725,8 @@ def create_mysql_database(auth, root, schema):
             import pymysql as mysql
             internalError = pymysql.err.InternalError
         except ImportError as e:
-            print(f"Please install MySQL connector with 'conda install mysql-connector-python' or the pure-python pymysql connector")
+            print(
+                f"Please install MySQL connector with 'conda install mysql-connector-python' or the pure-python pymysql connector")
             raise ImportError()
 
     conn = mysql.connect(host=auth.host, user=auth.user, password=auth.password)
@@ -727,7 +736,7 @@ def create_mysql_database(auth, root, schema):
     schema = schema.replace("filetime_tools", args.db)
     for line in schema.split(";"):
         line = line.strip()
-        if len(line)>0:
+        if len(line) > 0:
             c.execute(line)
     c.execute("INSERT INTO `{db}`.roots (rootdir) VALUES ('{rootdir}')".format(db=args.db, rootdir=root))
     conn.commit()
@@ -740,18 +749,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Compute file changes',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--create", help="Create a database for a given ROOT")
-    parser.add_argument("--db", help="Specify database location", default="das_ftt") # needs to be removed (outdated)
+    parser.add_argument("--db", help="Specify database location", default="das_ftt")  # needs to be removed (outdated)
     parser.add_argument("--config", help="Specify configuration file", default="default.ini")
     parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
-    parser.add_argument("--root", help="List the root in the DB", action='store_true') # (outdated)
-    parser.add_argument("--roots", help="List all roots in the DB", action='store_true') # initial root?
+    parser.add_argument("--root", help="List the root in the DB", action='store_true')  # (outdated)
+    parser.add_argument("--roots", help="List all roots in the DB", action='store_true')  # initial root?
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
     parser.add_argument("--dups", help="Report duplicates for most recent scan", action='store_true')
     parser.add_argument("--dupsize", help="Don't report dups smaller than dupsize", default=1024 * 1024, type=int)
     parser.add_argument("--out", help="Specifies output filename")
-    parser.add_argument("--vfiles", help="Report each file as ingested",action="store_true")
-    parser.add_argument("--vdirs", help="Report each dir as ingested",action="store_true")
+    parser.add_argument("--vfiles", help="Report each file as ingested", action="store_true")
+    parser.add_argument("--vdirs", help="Report each dir as ingested", action="store_true")
     parser.add_argument("--limit", help="Only search this many", type=int)
     parser.add_argument("--addroot", help="Add a new root", type=str)
     parser.add_argument("--delroot", help="Delete an existing root", type=str)
@@ -768,9 +777,8 @@ if __name__ == "__main__":
         except Exception as e:
             print("An error occured when attempting to create the database: ", e)
     # elif args.create:
-        # create an sqlite3 db
-        # pass
-
+    # create an sqlite3 db
+    # pass
 
     if args.db:
         if args.db.endswith(".sqlite3"):
@@ -825,7 +833,7 @@ if __name__ == "__main__":
     elif args.jreport:
         fchange.jreport()
     elif args.dups:
-        fchange.report_dups( fchange.last_scan())
+        fchange.report_dups(fchange.last_scan())
     else:
         # root = fchange.get_root()
         for root in fchange.get_roots():
