@@ -771,9 +771,12 @@ if __name__ == "__main__":
     fchange = None
     auth = None
 
+    if args.config:
+        auth = DBMySQLAuth.FromEnv(args.config)
+        args.db = auth.database
+
     if args.create:
         try:
-            auth = DBMySQLAuth.FromEnv(args.config)
             create_mysql_database(auth, args.create, MYSQL_SCHEMA)
             print("Created {}  initial root: {}".format(args.db, args.create))
         except Exception as e:
