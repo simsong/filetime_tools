@@ -850,9 +850,9 @@ if __name__ == "__main__":
             if root.startswith("s3://") and args.db.endswith(".sqlite3"):
                 sc = scanner.S3Scanner(fchange.conn, args, auth)
             elif root.startswith("s3://"):
-                sc = scanner.MySQLS3Scanner(conn, args, auth)
+                sc = scanner.MySQLS3Scanner(conn, args, auth, args.prefix)
             elif args.db.endswith(".sqlite3"):
                 sc = scanner.Scanner(conn, args, auth)
             else:
-                sc = scanner.MySQLScanner(conn, args, auth)
+                sc = scanner.MySQLScanner(conn, args, auth, args.prefix)
             sc.ingest(root)
