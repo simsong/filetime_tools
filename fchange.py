@@ -750,7 +750,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Compute file changes',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--create", help="Create a database for a given ROOT")
-    parser.add_argument("--db", help="Specify database location", default="das_ftt")  # needs to be removed (outdated)
+    parser.add_argument("--db", help="Specify database location")  # needs to be removed (outdated)
     parser.add_argument("--prefix", help="Specify table prefix to sue", default="")  # needs to be removed (outdated)
     parser.add_argument("--config", help="Specify configuration file", default="default.ini")
     parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
@@ -781,6 +781,9 @@ if __name__ == "__main__":
     # elif args.create:
     # create an sqlite3 db
     # pass
+
+    if args.db is None:
+        args.db = auth.database
 
     if args.db:
         if args.db.endswith(".sqlite3"):
