@@ -58,54 +58,54 @@ CREATE INDEX IF NOT EXISTS scans_idx2 ON scans(time);
 
 MYSQL_SCHEMA = \
     """
-DROP TABLE IF EXISTS `filetime_tools`.metadata;
-CREATE TABLE  `filetime_tools`.metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255) NOT NULL);
+DROP TABLE IF EXISTS `{dbname}`.{prefix}metadata;
+CREATE TABLE  `{dbname}`.{prefix}metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255) NOT NULL);
 
-DROP TABLE IF EXISTS `filetime_tools`.roots;
-CREATE TABLE `filetime_tools`.roots (rootid INTEGER PRIMARY KEY AUTO_INCREMENT, rootdir VARCHAR(255) NOT NULL);
+DROP TABLE IF EXISTS `{dbname}`.{prefix}roots;
+CREATE TABLE `{dbname}`.{prefix}roots (rootid INTEGER PRIMARY KEY AUTO_INCREMENT, rootdir VARCHAR(255) NOT NULL);
 
-DROP TABLE IF EXISTS `filetime_tools`.dirnames;
-CREATE TABLE  `filetime_tools`.dirnames (dirnameid INTEGER PRIMARY KEY AUTO_INCREMENT,dirname TEXT(65536));
-CREATE UNIQUE INDEX  dirnames_idx2 ON `filetime_tools`.dirnames (dirname(700));
+DROP TABLE IF EXISTS `{dbname}`.{prefix}dirnames;
+CREATE TABLE  `{dbname}`.{prefix}dirnames (dirnameid INTEGER PRIMARY KEY AUTO_INCREMENT,dirname TEXT(65536));
+CREATE UNIQUE INDEX  dirnames_idx2 ON `{dbname}`.{prefix}dirnames (dirname(700));
 
-DROP TABLE IF EXISTS `filetime_tools`.filenames;
-CREATE TABLE  `filetime_tools`.filenames (filenameid INTEGER PRIMARY KEY AUTO_INCREMENT,filename TEXT(65536));
-CREATE INDEX  filenames_idx2 ON `filetime_tools`.filenames (filename(700));
+DROP TABLE IF EXISTS `{dbname}`.{prefix}filenames;
+CREATE TABLE  `{dbname}`.{prefix}filenames (filenameid INTEGER PRIMARY KEY AUTO_INCREMENT,filename TEXT(65536));
+CREATE INDEX  filenames_idx2 ON `{dbname}`.{prefix}filenames (filename(700));
 
-DROP TABLE IF EXISTS `filetime_tools`.paths;
-CREATE TABLE  `filetime_tools`.paths (pathid INTEGER PRIMARY KEY AUTO_INCREMENT,
-       dirnameid INTEGER REFERENCES `filetime_tools`.dirnames(dirnameid),
-       filenameid INTEGER REFERENCES `filetime_tools`.filenames(filenameid));
-CREATE INDEX  paths_idx2 ON `filetime_tools`.paths(dirnameid);
-CREATE INDEX  paths_idx3 ON `filetime_tools`.paths(filenameid);
+DROP TABLE IF EXISTS `{dbname}`.{prefix}paths;
+CREATE TABLE  `{dbname}`.{prefix}paths (pathid INTEGER PRIMARY KEY AUTO_INCREMENT,
+       dirnameid INTEGER REFERENCES `{dbname}`.{prefix}dirnames(dirnameid),
+       filenameid INTEGER REFERENCES `{dbname}`.{prefix}filenames(filenameid));
+CREATE INDEX  paths_idx2 ON `{dbname}`.{prefix}paths(dirnameid);
+CREATE INDEX  paths_idx3 ON `{dbname}`.{prefix}paths(filenameid);
 
-DROP TABLE IF EXISTS `filetime_tools`.hashes;
-CREATE TABLE  `filetime_tools`.hashes (hashid INTEGER PRIMARY KEY AUTO_INCREMENT,hash TEXT(65536) NOT NULL);
-CREATE INDEX  hashes_idx2 ON `filetime_tools`.hashes( hash(700));
+DROP TABLE IF EXISTS `{dbname}`.{prefix}hashes;
+CREATE TABLE  `{dbname}`.{prefix}hashes (hashid INTEGER PRIMARY KEY AUTO_INCREMENT,hash TEXT(65536) NOT NULL);
+CREATE INDEX  hashes_idx2 ON `{dbname}`.{prefix}hashes( hash(700));
 
-DROP TABLE IF EXISTS `filetime_tools`.scans;
-CREATE TABLE  `filetime_tools`.scans (scanid INTEGER PRIMARY KEY AUTO_INCREMENT,
-                                      rootid INTEGER REFERENCES roots(rootid),
+DROP TABLE IF EXISTS `{dbname}`.{prefix}scans;
+CREATE TABLE  `{dbname}`.{prefix}scans (scanid INTEGER PRIMARY KEY AUTO_INCREMENT,
+                                      rootid INTEGER REFERENCES {prefix}roots(rootid),
                                       time DATETIME NOT NULL UNIQUE,
                                       duration INTEGER);
-CREATE INDEX  scans_idx1 ON `filetime_tools`.scans(scanid);
-CREATE INDEX  scans_idx2 ON `filetime_tools`.scans(time);
+CREATE INDEX  scans_idx1 ON `{dbname}`.{prefix}scans(scanid);
+CREATE INDEX  scans_idx2 ON `{dbname}`.{prefix}scans(time);
 
-DROP TABLE IF EXISTS `filetime_tools`.files;
-CREATE TABLE  `filetime_tools`.files (fileid INTEGER PRIMARY KEY AUTO_INCREMENT,
-                                  pathid INTEGER REFERENCES paths(pathid),
-                                  rootid INTEGER REFERENCES roots(rootid),
+DROP TABLE IF EXISTS `{dbname}`.{prefix}files;
+CREATE TABLE  `{dbname}`.{prefix}files (fileid INTEGER PRIMARY KEY AUTO_INCREMENT,
+                                  pathid INTEGER REFERENCES {prefix}paths(pathid),
+                                  rootid INTEGER REFERENCES {prefix}roots(rootid),
                                   mtime INTEGER NOT NULL, 
                                   size INTEGER NOT NULL, 
-                                  hashid INTEGER REFERENCES hashes(hashid), 
-                                  scanid INTEGER REFERENCES scans(scanid));
-CREATE INDEX  files_idx1 ON `filetime_tools`.files(pathid);
-CREATE INDEX  files_idx2 ON `filetime_tools`.files(rootid);
-CREATE INDEX  files_idx3 ON `filetime_tools`.files(mtime);
-CREATE INDEX  files_idx4 ON `filetime_tools`.files(size);
-CREATE INDEX  files_idx5 ON `filetime_tools`.files(hashid);
-CREATE INDEX  files_idx6 ON `filetime_tools`.files(scanid);
-CREATE INDEX  files_idx7 ON `filetime_tools`.files(scanid,hashid);
+                                  hashid INTEGER REFERENCES {prefix}hashes(hashid), 
+                                  scanid INTEGER REFERENCES {prefix}scans(scanid));
+CREATE INDEX  files_idx1 ON `{dbname}`.{prefix}files(pathid);
+CREATE INDEX  files_idx2 ON `{dbname}`.{prefix}files(rootid);
+CREATE INDEX  files_idx3 ON `{dbname}`.{prefix}files(mtime);
+CREATE INDEX  files_idx4 ON `{dbname}`.{prefix}files(size);
+CREATE INDEX  files_idx5 ON `{dbname}`.{prefix}files(hashid);
+CREATE INDEX  files_idx6 ON `{dbname}`.{prefix}files(scanid);
+CREATE INDEX  files_idx7 ON `{dbname}`.{prefix}files(scanid,hashid);
 """
 
 """Explanation of tables:
@@ -404,26 +404,27 @@ class SQLite3FileChangeManager(FileChangeManager):
 
 class MySQLFileChangeManager(FileChangeManager):
 
-    def __init__(self, conn, auth, database):
+    def __init__(self, conn, auth, database, prefix=""):
         self.database = database
         self.auth = auth
+        self.prefix = prefix
         super().__init__(conn)
 
     def list_scans(self):
         results = self.conn.csfr(self.auth,
-                                 "SELECT scanid, time, rootid, rootdir FROM `{db}`.scans NATURAL JOIN `{db}`.roots".format(
-                                     db=self.database))
+                                 "SELECT scanid, time, rootid, rootdir FROM `{db}`.{prefix}scans NATURAL JOIN `{db}`.roots".format(
+                                     db=self.database, prefix=self.prefix))
         for (scanid, time, rootid, rootdir) in results:
             print(scanid, rootdir, time)
 
     def last_scan(self):
-        return DBMySQL.execselect(self.conn, "SELECT MAX(scanid) from `{}`.scans".format(self.database))[0]
+        return DBMySQL.execselect(self.conn, "SELECT MAX(scanid) from `{db}`.{prefix}scans".format(db=self.database, prefix=self.prefix))[0]
 
     def get_all_files(self, scan0):
         results = self.conn.csfr(self.auth,
                                  "SELECT fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime "
-                                 "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-                                 "WHERE scanid={}".format(self.database, scan0))
+                                 "FROM `{db}`.{prefix}files NATURAL JOIN {prefix}paths NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames "
+                                 "WHERE scanid={scanid}".format(db=self.database, scanid=scan0, prefix=self.prefix))
         for fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime in results:
             yield {"fileid": fileid, "pathid": pathid, "rootid": rootid, "size": size,
                    "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid,
@@ -434,9 +435,10 @@ class MySQLFileChangeManager(FileChangeManager):
         ret = []
         results = self.conn.csfr(self.auth,
                                  "SELECT fileid, pathid, size,  dirnameid, dirname, filenameid, filename, mtime "
-                                 "FROM `{}`.files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
-                                 "WHERE scanid={} AND pathid NOT IN (SELECT pathid FROM files WHERE scanid={})".format(
-                                     self.database, scan1, scan0))
+                                 "FROM `{db}`.{prefix}files NATURAL JOIN {prefix}paths NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames "
+                                 "WHERE scanid={scan0} AND pathid NOT IN (SELECT pathid FROM {prefix}files WHERE scanid={scan1})".format(
+                                     db=self.database, scan0=scan1, scan1=scan0, prefix=self.prefix)) 
+                                    # Maybe this should be cleaned up? It might look messy, but the logic makes sense.
         for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in results:
             ret.append({"fileid": fileid, "pathid": pathid, "size": size,
                         "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid, "filename": filename,
@@ -450,22 +452,22 @@ class MySQLFileChangeManager(FileChangeManager):
         """Files that were changed between scan0 and scan1"""
         ret = []
         results = self.conn.csfr(self.auth, "SELECT a.pathid as pathid, a.hashid, b.hashid FROM "
-                                            "(SELECT pathid, hashid, scanid FROM `{db}`.files WHERE scanid={scan0}) as a "
-                                            "JOIN (SELECT pathid, hashid, scanid FROM `{db}`.FILES WHERE scanid={scan1}) as b "
+                                            "(SELECT pathid, hashid, scanid FROM `{db}`.{prefix}files WHERE scanid={scan0}) as a "
+                                            "JOIN (SELECT pathid, hashid, scanid FROM `{db}`.{prefix}files WHERE scanid={scan1}) as b "
                                             "ON a.pathid=b.pathid WHERE a.hashid != b.hashid".format(db=self.database,
                                                                                                      scan0=scan0,
-                                                                                                     scan1=scan1))
+                                                                                                     scan1=scan1,
+                                                                                                     prefix=self.prefix))
         for pathid, ahashid, bhashid in results:
             dirnameid, filenameid = self.conn.csfr(self.auth,
-                                                   "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(
-                                                       self.database, pathid))[0]
+                                                   "SELECT dirnameid, filenameid FROM `{db}`.{prefix}paths WHERE pathid={pathid}".format(
+                                                       db=self.database, pathid=pathid, prefix=self.prefix))[0]
             dirname = self.conn.csfr(self.auth,
-                                     "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database,
-                                                                                                   dirnameid))[0][0]
+                                     "SELECT dirname FROM `{db}`.{prefix}dirnames WHERE dirnameid={dirnameid}".format(
+                                                                            db=self.database, dirnameid=dirnameid, prefix=self.prefix))[0][0]
             filename = self.conn.csfr(self.auth,
-                                      "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(self.database,
-                                                                                                       filenameid))[0][
-                0]
+                                      "SELECT filename FROM `{db}`.{prefix}filenames WHERE filenameid={filenameid}".format(
+                                                                            db=self.database, filenameid=filenameid, prefix=self.prefix))[0][0]
             yield {"dirname": dirname, "filename": filename}
         #     ret.append({"pathid":pathid, "ahashid":ahashid, "bhashid":bhashid})
         # return ret
@@ -474,9 +476,9 @@ class MySQLFileChangeManager(FileChangeManager):
         """Return a generator for the duplicate files at scan0.
         Returns a list of a list of File objects, sorted by size"""
         cresult = self.conn.csfr(self.auth, 'SELECT hashid, ct, size FROM '
-                                            '(SELECT hashid, count(hashid) AS ct, size FROM `{dbname}`.files WHERE scanid={scanid} GROUP BY hashid, size) as T '
+                                            '(SELECT hashid, count(hashid) AS ct, size FROM `{dbname}`.{prefix}files WHERE scanid={scanid} GROUP BY hashid, size) as T '
                                             'WHERE ct>1 AND size>{dupsize} ORDER BY 3 DESC;'.format(
-            dbname=self.database, scanid=scan0, dupsize=args.dupsize))
+            dbname=self.database, scanid=scan0, dupsize=args.dupsize, prefix=self.prefix))
         for hashid, ct, size in cresult:
             ret = []
             dresult = self.conn.csfr(self.auth,
@@ -498,8 +500,8 @@ class MySQLFileChangeManager(FileChangeManager):
 
         def get_singletons(scanid):
             results = self.conn.csfr(self.auth, 'SELECT hashID, pathid, count(*) AS ct '
-                                                'FROM `{}`.files WHERE scanid={} GROUP BY hashid, pathid HAVING ct=1'.format(
-                self.database, scanid))
+                                                'FROM `{db}`.{prefix}files WHERE scanid={scanid} GROUP BY hashid, pathid HAVING ct=1'.format(
+                db=self.database, scanid=scanid, prefix=self.prefix))
             return results
 
         pairs_in_scan0 = set()
@@ -511,25 +513,23 @@ class MySQLFileChangeManager(FileChangeManager):
         for (hashID, path2, count) in get_singletons(scan1):
             if hashID in path1_for_hash and (hashID, path2) not in pairs_in_scan0:
                 dirnameid1, filenameid1 = self.conn.csfr(self.auth,
-                                                         "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(
-                                                             self.database, path1_for_hash[hashID]))[0]
+                                                         "SELECT dirnameid, filenameid FROM `{db}`.{prefix}paths WHERE pathid={pathid}".format(
+                                                             db=self.database, pathid=path1_for_hash[hashID], prefix=self.prefix))[0]
                 dirname1 = self.conn.csfr(self.auth,
-                                          "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database,
-                                                                                                        dirnameid1))[0][
-                    0]
+                                          "SELECT dirname FROM `{db}`.{prefix}dirnames WHERE dirnameid={dirnameid}".format(
+                                                            db=self.database, dirnameid=dirnameid1, prefix=self.prefix))[0][0]
                 filename1 = self.conn.csfr(self.auth,
-                                           "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(
-                                               self.database, filenameid1))[0][0]
+                                           "SELECT filename FROM `{db}`.{prefix}filenames WHERE filenameid={filenameid}".format(
+                                               db=self.database, filenameid=filenameid1, prefix=self.prefix))[0][0]
                 dirnameid2, filenameid2 = self.conn.csfr(self.auth,
-                                                         "SELECT dirnameid, filenameid FROM `{}`.paths WHERE pathid={}".format(
-                                                             self.database, path2))[0]
+                                                         "SELECT dirnameid, filenameid FROM `{db}`.{prefix}paths WHERE pathid={pathid}".format(
+                                                             db=self.database, pathid=path2, prefix=self.prefix))[0]
                 dirname2 = self.conn.csfr(self.auth,
-                                          "SELECT dirname FROM `{}`.dirnames WHERE dirnameid={}".format(self.database,
-                                                                                                        dirnameid2))[0][
-                    0]
+                                          "SELECT dirname FROM `{db}`.{prefix}dirnames WHERE dirnameid={dirnameid}".format(
+                                                db=self.database, dirnameid=dirnameid2, prefix=self.prefix))[0][0]
                 filename2 = self.conn.csfr(self.auth,
-                                           "SELECT filename FROM `{}`.filenames WHERE filenameid={}".format(
-                                               self.database, filenameid2))[0][0]
+                                           "SELECT filename FROM `{db}`.{prefix}filenames WHERE filenameid={filenameid}".format(
+                                                db=self.database, filenameid=filenameid2, prefix=self.prefix))[0][0]
                 yield {"dirname1": dirname1, "filename1": filename1, "dirname2": dirname2, "filename2": filename2}
 
                 # yield ({"hashid":hashID, "pathid":path1_for_hash[hashID]},
@@ -539,8 +539,8 @@ class MySQLFileChangeManager(FileChangeManager):
         docs = None
         if args.out:
             docs = tydoc()
-        atime = self.conn.execselect("SELECT time FROM `{}`.scans WHERE scanid={}".format(self.database, a))
-        btime = self.conn.execselect("SELECT time FROM `{}`.scans WHERE scanid={}".format(self.database, b))
+        atime = self.conn.execselect("SELECT time FROM `{db}`.{prefix}scans WHERE scanid={scanid}".format(db=self.database, scanid=a, prefix=self.prefix))
+        btime = self.conn.execselect("SELECT time FROM `{db}`.{prefix}scans WHERE scanid={scanid}".format(db=self.database, scanid=b, prefix=self.prefix))
 
         if atime is None:
             atime = 0
@@ -613,8 +613,8 @@ class MySQLFileChangeManager(FileChangeManager):
         duplicate_bytes = 0
 
         result = self.conn.csfr(self.auth,
-                                "SELECT scanid, rootid, rootdir FROM `{db}`.scans NATURAL JOIN `{db}`.roots WHERE scanid=%s".format(
-                                    db=self.database), vals=[b])[0]
+                                "SELECT scanid, rootid, rootdir FROM `{db}`.{prefix}scans NATURAL JOIN `{db}`.{prefix}roots WHERE scanid=%s".format(
+                                    db=self.database, prefix=self.prefix), vals=[b])[0]
         rootdir = result[2]
         print("ROOT DIR: ", rootdir)
 
@@ -693,24 +693,24 @@ class MySQLFileChangeManager(FileChangeManager):
 
     def get_root(self):
 
-        result = self.conn.csfr(auth, "SELECT value FROM `{}`.metadata WHERE name='root'".format(self.database))
+        result = self.conn.csfr(auth, "SELECT value FROM `{db}`.{prefix}metadata WHERE name='root'".format(db=self.database, prefix=self.prefix))
         return result[0][0]
 
     def get_roots(self):
-        roots = self.conn.csfr(auth, "SELECT rootdir FROM `{}`.roots".format(self.database))
+        roots = self.conn.csfr(auth, "SELECT rootdir FROM `{db}`.{prefix}roots".format(db=self.database, prefix=self.prefix))
         return roots
 
     def add_root(self, root):
         try:
             self.conn.csfr(self.auth,
-                           "INSERT IGNORE INTO `{}`.roots (rootdir) VALUES ('{}')".format(self.database, root))
+                           "INSERT IGNORE INTO `{db}`.{prefix}roots (rootdir) VALUES ('{root}')".format(db=self.database, root=root, prefix=self.prefix))
         except Exception as e:
             print("Could not add root: {} \n ".format(root), e)
 
     def del_root(self, root):
         try:
             self.conn.csfr(self.auth,
-                           "DELETE IGNORE FROM `{}`.roots WHERE rootdir='{}'".format(self.database, root))
+                           "DELETE IGNORE FROM `{db}`.{prefix}roots WHERE rootdir='{root}'".format(db=self.database, root=root, prefix=self.prefix))
         except Exception as e:
             print("Could not delete root: {} \n ".format(root), e)
 
@@ -733,7 +733,8 @@ def create_mysql_database(auth, root, schema):
 
     c = conn.cursor()
     c.execute("CREATE DATABASE IF NOT EXISTS {}".format(args.db))
-    schema = schema.replace("filetime_tools", args.db)
+    # schema = schema.replace("filetime_tools", args.db)
+    schema = schema.format(dbname=args.db, prefix=args.prefix)
     for line in schema.split(";"):
         line = line.strip()
         if len(line) > 0:
@@ -750,6 +751,7 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--create", help="Create a database for a given ROOT")
     parser.add_argument("--db", help="Specify database location", default="das_ftt")  # needs to be removed (outdated)
+    parser.add_argument("--prefix", help="Specify table prefix to sue", default="")  # needs to be removed (outdated)
     parser.add_argument("--config", help="Specify configuration file", default="default.ini")
     parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
     parser.add_argument("--root", help="List the root in the DB", action='store_true')  # (outdated)
@@ -795,7 +797,7 @@ if __name__ == "__main__":
             try:
                 auth = DBMySQLAuth.FromEnv(args.config)
                 conn = DBMySQL(auth)
-                fchange = MySQLFileChangeManager(conn, auth, args.db)
+                fchange = MySQLFileChangeManager(conn, auth, args.db, args.prefix)
             except Exception as e:
                 print("Could not connect to MySQL server: ", e)
                 exit(1)

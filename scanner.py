@@ -8,9 +8,7 @@ Implements the scanner.
 import os
 import sys
 import zipfile
-import time
 from datetime import datetime
-from dbfile import DBFile, SLGSQL
 from ctools.dbfile import *
 import ctools.s3
 import sqlite3
@@ -52,10 +50,11 @@ def open_zipfile(path):
 
 class Scanner(object):
     """Class to scan a directory and store the results in the database."""
-    def __init__(self, conn, args, auth=None):
+    def __init__(self, conn, args, auth=None, prefix=""):
         self.conn = conn
         self.args = args
         self.auth = auth
+        self.prefix = prefix
         self.filecount = 0
         self.dircount = 0
 
@@ -236,41 +235,53 @@ class MySQLScanner(Scanner):
         super().__init__(*args,**kwargs)
 
     def get_hashid(self, hexhash):
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.hashes (hash) VALUES (%s)".format(self.args.db), vals=[hexhash])
-        result = self.conn.csfr(self.auth, "SELECT hashid FROM `{}`.hashes WHERE hash='{}' LIMIT 1".format(self.args.db,hexhash))
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{db}`.{prefix}hashes (hash) VALUES (%s)"
+            .format(db=self.args.db, prefix=self.prefix), vals=[hexhash])
+        result = self.conn.csfr(self.auth, "SELECT hashid FROM `{db}`.{prefix}hashes WHERE hash='{hash}' LIMIT 1"
+            .format(db=self.args.db, prefix=self.prefix, hash=hexhash))
         for row in result:
             return row[0]
 
     def get_scanid(self, now, root):
-        rootid = self.conn.csfr(self.auth, "SELECT rootid FROM `{}`.roots WHERE rootdir=%s LIMIT 1".format(self.args.db), vals=[root])[0][0]
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.scans (time, rootid) VALUES (%s, %s)".format(self.args.db),vals=[now, rootid])
-        result = self.conn.csfr(self.auth, "SELECT scanid FROM `{}`.scans WHERE time='{}' AND rootid='{}' LIMIT 1".format(self.args.db,now, rootid))
+        rootid = self.conn.csfr(self.auth, "SELECT rootid FROM `{db}`.{prefix}roots WHERE rootdir=%s LIMIT 1"
+            .format(db=self.args.db, prefix=self.prefix), vals=[root])[0][0]
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{db}`.{prefix}scans (time, rootid) VALUES (%s, %s)"
+            .format(db=self.args.db, prefix=self.prefix),vals=[now, rootid])
+        result = self.conn.csfr(self.auth, "SELECT scanid FROM `{db}`.{prefix}scans WHERE time='{time}' AND rootid='{rootid}' LIMIT 1"
+            .format(db=self.args.db, prefix=self.prefix, time=now, rootid=rootid))
         for row in result:
             return row[0]
 
     def get_pathid(self, path):
         (dirname, filename) = os.path.split(path)    
         # dirname
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.dirnames (dirname) VALUES (%s)".format(self.args.db), vals=[dirname])
-        dirids = self.conn.csfr(self.auth, "SELECT dirnameid FROM`{}`.dirnames WHERE dirname=%s LIMIT 1".format(self.args.db),vals=[dirname])
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{db}`.{prefix}dirnames (dirname) VALUES (%s)"
+            .format(db=self.args.db, prefix=self.prefix), vals=[dirname])
+        dirids = self.conn.csfr(self.auth, "SELECT dirnameid FROM`{db}`.{prefix}dirnames WHERE dirname=%s LIMIT 1"
+            .format(db=self.args.db, prefix=self.prefix), vals=[dirname])
         for dirid in dirids:
             dirnameid = dirid[0]
 
         # filename
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.filenames (filename) VALUES (%s)".format(self.args.db), vals=[filename])
-        fileids = self.conn.csfr(self.auth, "SELECT filenameid FROM `{}`.filenames WHERE filename=%s LIMIT 1".format(self.args.db), vals=[filename])
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{db}`.{prefix}filenames (filename) VALUES (%s)"
+            .format(db=self.args.db, prefix=self.prefix), vals=[filename])
+        fileids = self.conn.csfr(self.auth, "SELECT filenameid FROM `{db}`.{prefix}filenames WHERE filename=%s LIMIT 1"
+            .format(db=self.args.db, prefix=self.prefix), vals=[filename])
         for fileid in fileids:
             filenameid = fileid[0]
 
         # pathid
-        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{}`.paths (dirnameid, filenameid) VALUES (%s,%s)".format(self.args.db), vals=[dirnameid, filenameid])
-        pathids = self.conn.csfr(self.auth, "SELECT pathid FROM `{}`.paths WHERE dirnameid=%s and filenameid=%s LIMIT 1".format(self.args.db),vals=[dirnameid,filenameid])
+        self.conn.csfr(self.auth, "INSERT IGNORE INTO `{db}`.{prefix}paths (dirnameid, filenameid) VALUES (%s,%s)"
+            .format(db=self.args.db, prefix=self.prefix), vals=[dirnameid, filenameid])
+        pathids = self.conn.csfr(self.auth, "SELECT pathid FROM `{db}`.{prefix}paths WHERE dirnameid=%s and filenameid=%s LIMIT 1"
+            .format(db=self.args.db, prefix=self.prefix),vals=[dirnameid,filenameid])
         for pathid in pathids:
             return pathid[0]
         raise RuntimeError(f"no pathid found for {dirnameid},{filenameid}")
 
     def get_rootid(self, rootname):
-        result = self.conn.csfr(self.auth, "SELECT rootid FROM `{}`.roots WHERE rootdir=%s LIMIT 1".format(self.args.db), vals=[rootname])
+        result = self.conn.csfr(self.auth, "SELECT rootid FROM `{db}`.{prefix}roots WHERE rootdir=%s LIMIT 1"
+            .format(db=self.args.db, prefix=self.prefix), vals=[rootname])
         return result[0][0]
 
     def get_file_hashid(self, *, f=None, pathname=None, file_size, pathid=None, mtime, hexdigest=None):
@@ -284,7 +295,8 @@ class MySQLScanner(Scanner):
         # If not, we has that file and enter it.
         # Trusting that mtime gets updated if the file contents change.
         # We might also want to look at the file gen count.
-        result = self.conn.csfr(self.auth, "SELECT hashid FROM `{}`.files WHERE pathid=%s AND mtime=%s AND size=%s LIMIT 1".format(self.args.db), vals=[pathid, mtime, file_size])
+        result = self.conn.csfr(self.auth, "SELECT hashid FROM `{db}`.{prefix}files WHERE pathid=%s AND mtime=%s AND size=%s LIMIT 1"
+            .format(db=self.args.db, prefix=self.prefix), vals=[pathid, mtime, file_size])
         for row in result:
             return row[0]
 
@@ -315,9 +327,9 @@ class MySQLScanner(Scanner):
             return
         except OSError as e:
             return
-        self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,rootid,mtime,size,hashid,scanid) "
+        self.conn.csfr(self.auth, "INSERT INTO `{db}`.{prefix}files (pathid,rootid,mtime,size,hashid,scanid) "
                                 "VALUES (%s,%s,%s,%s,%s,%s)".format(
-                                self.args.db) , vals=[int(pathid), int(rootid), mtime,
+                                db=self.args.db, prefix=self.prefix) , vals=[int(pathid), int(rootid), mtime,
                                 int(file_size), int(hashid), int(self.scanid)])
         
         if self.args.vfiles:
@@ -357,7 +369,7 @@ class MySQLScanner(Scanner):
                     print(e)
 
     def ingest_done(self, root):
-        self.conn.csfr(self.auth, "UPDATE `{}`.scans SET duration=%s WHERE scanid=%s".format(self.args.db), vals=[self.t1 - self.t0, self.scanid])
+        self.conn.csfr(self.auth, "UPDATE `{db}`.{prefix}scans SET duration=%s WHERE scanid=%s".format(db=self.args.db, prefix=self.prefix), vals=[self.t1 - self.t0, self.scanid])
         self.conn.commit()
         print("Total files added to database: {}".format(self.filecount))
         print("Total directories scanned:     {}".format(self.dircount))
@@ -389,9 +401,9 @@ class MySQLS3Scanner(MySQLScanner):
             return
         except OSError as e:
             return
-        self.conn.csfr(self.auth, "INSERT INTO `{}`.files (pathid,rootid,mtime,size,hashid,scanid) "
+        self.conn.csfr(self.auth, "INSERT INTO `{db}`.{prefix}files (pathid,rootid,mtime,size,hashid,scanid) "
                                 "VALUES (%s,%s,%s,%s,%s,%s)".format(
-                                self.args.db), vals=[int(pathid), int(rootid), int(mtime),
+                                db=self.args.db, prefix=self.prefix), vals=[int(pathid), int(rootid), int(mtime),
                                 int(file_size), int(hashid), int(self.scanid)])
         
         if self.args.vfiles:
