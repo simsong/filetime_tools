@@ -367,6 +367,8 @@ class MySQLScanner(Scanner):
                     self.dircount  += 1
                 except sqlite3.IntegrityError as e:
                     print(e)
+                except zipfile.BadZipFile as e:
+                    print(e)
 
     def ingest_done(self, root):
         self.conn.csfr(self.auth, "UPDATE `{db}`.{prefix}scans SET duration=%s WHERE scanid=%s".format(db=self.args.db, prefix=self.prefix), vals=[self.t1 - self.t0, self.scanid])
