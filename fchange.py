@@ -797,6 +797,7 @@ if __name__ == "__main__":
                            database=config["MYSQL_SERVER"]["DATABASE"] if config["MYSQL_SERVER"][
                                                                               "DATABASE"] is not None else "")
         args.db = auth.database
+        args.prefix = config["DEFAULT"]["TABLE_PREFIX"]
     else:
         pass
 
