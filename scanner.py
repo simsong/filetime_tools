@@ -13,8 +13,8 @@ from ctools.dbfile import *
 from ctools.s3 import *
 
 # SQLite3 schema
-SQLITE3_SCHEMA = open("schema_sqlite3.sql","r").read()
-MYSQL_SCHEMA   = open("schema_mysql.sql","r").read()
+# SQLITE3_SCHEMA = open("schema_sqlite3.sql","r").read()
+# MYSQL_SCHEMA   = open("schema_mysql.sql","r").read()
 
 CACHE_SIZE = 2000000
 SQLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
