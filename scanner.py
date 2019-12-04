@@ -5,14 +5,12 @@ Part of the file system change detector.
 Implements the scanner.
 """
 
-import os
-import sys
+import sqlite3
 import zipfile
 from datetime import datetime
+
 from ctools.dbfile import *
-import ctools.s3
-import sqlite3
-import pymysql.cursors
+from ctools.s3 import *
 
 # SQLite3 schema
 SQLITE3_SCHEMA = open("schema_sqlite3.sql","r").read()
@@ -160,6 +158,7 @@ class Scanner(object):
     def ingest_walk(self, root):
         """Walk the local file system and go inside ZIP files"""
         for (dirpath, dirnames, filenames) in os.walk(root):
+            print(dirpath, dirnames, filenames)
             #
             # see https://docs.python.org/3.7/library/sqlite3.html#using-the-connection-as-a-context-manager
             try:
@@ -247,7 +246,8 @@ class MySQLScanner(Scanner):
             .format(db=self.args.db, prefix=self.prefix), vals=[root])[0][0]
         self.conn.csfr(self.auth, "INSERT IGNORE INTO `{db}`.{prefix}scans (time, rootid) VALUES (%s, %s)"
             .format(db=self.args.db, prefix=self.prefix),vals=[now, rootid])
-        result = self.conn.csfr(self.auth, "SELECT scanid FROM `{db}`.{prefix}scans WHERE time='{time}' AND rootid='{rootid}' LIMIT 1"
+        result = self.conn.csfr(self.auth, "SELECT scanid FROM `{db}`.{prefix}scans WHERE time='{time}' AND rootid='{"
+                                           "rootid}' LIMIT 1 "
             .format(db=self.args.db, prefix=self.prefix, time=now, rootid=rootid))
         for row in result:
             return row[0]
