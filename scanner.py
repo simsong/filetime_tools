@@ -417,6 +417,7 @@ class MySQLS3Scanner(MySQLScanner):
             from ctools import s3
             (bucket,key) = s3.get_bucket_key(root)
             for obj in s3.list_objects(bucket,key):
+            # for obj in s3.search_objects(bucket, name=""):
                 # {'LastModified': '2019-03-28T21:36:51.000Z', 
                 #   'ETag': '"46610609053db79a94c4bd29cad8f4ff"', 
                 #   'StorageClass': 'STANDARD', 
