@@ -7,8 +7,12 @@ filetime_tools is a collection of programs for working with files and timestamps
 * Change the EXIF in JPEGs to be consistent with the timestamp in the file's name.
 * Change the name of a JPEG to be consistent with its EXIF timestamp
 
+# Configuration
+By default, `fchange.py` will look to the `default.ini` file for MySQL authentication credentials.
 
-Available programs:
+You can specify a different configuration file with the `--config [path to configuration file]` flag.
+
+# Available programs:
 
 _fchange.py_ - Scan a directory and report file system changes.
 _fix_jpegs.py_ - Change filename or timestamps to take into account the time stored in the EXIF
@@ -41,5 +45,3 @@ You can do this just with Unix command line tools:
 You can do this just with Unix command line tools:
 
    find . -type d -empty -delete
-   
-
