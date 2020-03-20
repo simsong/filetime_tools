@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 import scanner
 from ctools.dbfile import *
 from ctools.tydoc import *
+from ctools.env import *
 import configparser
 
 CACHE_SIZE = 2000000
@@ -108,6 +109,16 @@ CREATE INDEX  files_idx4 ON `{dbname}`.{prefix}files(size);
 CREATE INDEX  files_idx5 ON `{dbname}`.{prefix}files(hashid);
 CREATE INDEX  files_idx6 ON `{dbname}`.{prefix}files(scanid);
 CREATE INDEX  files_idx7 ON `{dbname}`.{prefix}files(scanid,hashid);
+
+DROP TABLE IF EXISTS `{dbname}`.{prefix}logs;
+CREATE TABLE `{dbname}`.{prefix}logs (logid INTEGER PRIMARY KEY AUTO_INCREMENT,
+                                scanid INTEGER REFERENCES {prefix}scans(scanid),
+                                message TEXT(65536));
+CREATE INDEX logs_idx1 ON `{dbname}`.{prefix}logs(scanid);
+CREATE INDEX logs_idx2 ON `{dbname}`.{prefix}logs(time);
+CREATE INDEX logs_idx3 ON `{dbname}`.{prefix}logs(scanid,logtime);
+
+
 """
 
 """Explanation of tables:
@@ -780,24 +791,33 @@ if __name__ == "__main__":
     parser.add_argument("--vfiles", help="Report each file as ingested", action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested", action="store_true")
     parser.add_argument("--limit", help="Only search this many", type=int)
+    parser.add_argument("--threads", help="Number of concurrent threads to use.", default=20, type=int)
+    parser.add_argument("--verbose", help="Extra output during runtime", action='store_true')
     parser.add_argument("--addroot", help="Add a new root", type=str)
     parser.add_argument("--delroot", help="Delete an existing root", type=str)
     args = parser.parse_args()
 
     fchange = None
     auth = None
-    config = configparser.ConfigParser()
-
     if args.config:
-        config.read(args.config)
-        auth = DBMySQLAuth(host=config["MYSQL_SERVER"]["HOST"] if config["MYSQL_SERVER"]["HOST"] is not None else "",
-                           user=config["MYSQL_SERVER"]["USER"] if config["MYSQL_SERVER"]["USER"] is not None else "",
-                           password=config["MYSQL_SERVER"]["PASSWORD"] if config["MYSQL_SERVER"][
-                                                                              "PASSWORD"] is not None else "",
-                           database=config["MYSQL_SERVER"]["DATABASE"] if config["MYSQL_SERVER"][
-                                                                              "DATABASE"] is not None else "")
+        config = get_vars(args.config)
+        host = user = password = database = prefix = ""
+        if 'MYSQL_HOST' in config:
+            host = config['MYSQL_HOST']
+        if 'MYSQL_USER' in config:
+            user = config['MYSQL_USER']
+        if 'MYSQL_PASSWORD' in config:
+            password = config['MYSQL_PASSWORD']
+        if 'MYSQL_DATABASE' in config:
+            database = config['MYSQL_DATABASE']
+        if 'MYSQL_PREFIX' in config:
+            prefix = config['MYSQL_PREFIX']
+        auth = DBMySQLAuth(host=host,
+                           user=user,
+                           password=password,
+                           database=database)
         args.db = auth.database
-        args.prefix = config["DEFAULT"]["TABLE_PREFIX"]
+        args.prefix = prefix
     else:
         pass
 
@@ -873,11 +893,11 @@ if __name__ == "__main__":
             root = root[0]
             print("Scanning: {}".format(root))
             if root.startswith("s3://") and args.db.endswith(".sqlite3"):
-                sc = scanner.S3Scanner(fchange.conn, args, auth)
+                sc = scanner.S3Scanner(fchange.conn, args, auth, threads=args.threads, verbose=args.verbose)
             elif root.startswith("s3://"):
-                sc = scanner.MySQLS3Scanner(conn, args, auth, args.prefix)
+                sc = scanner.MySQLS3Scanner(conn, args, auth, args.prefix, threads=args.threads, verbose=args.verbose)
             elif args.db.endswith(".sqlite3"):
-                sc = scanner.Scanner(conn, args, auth)
+                sc = scanner.Scanner(conn, args, auth, threads=args.threads, verbose=args.verbose)
             else:
-                sc = scanner.MySQLScanner(conn, args, auth, args.prefix)
+                sc = scanner.MySQLScanner(conn, args, auth, args.prefix, threads=args.threads, verbose=args.verbose)
             sc.ingest(root)

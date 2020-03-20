@@ -8,9 +8,13 @@ Implements the scanner.
 import sqlite3
 import zipfile
 from datetime import datetime
+from datetime import timedelta
+
+import queue, threading
 
 from ctools.dbfile import *
 from ctools.s3 import *
+
 
 # SQLite3 schema
 # SQLITE3_SCHEMA = open("schema_sqlite3.sql","r").read()
@@ -20,6 +24,8 @@ CACHE_SIZE = 2000000
 SQLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
 
 COMMIT_RATE = 10  # commit every 10 directories
+
+MAX_BATCH_SIZE = 50
 
 def hash_file(f):
     """High performance file hasher. Hash a file and return the MD5 hexdigest."""
@@ -48,13 +54,15 @@ def open_zipfile(path):
 
 class Scanner(object):
     """Class to scan a directory and store the results in the database."""
-    def __init__(self, conn, args, auth=None, prefix=""):
+    def __init__(self, conn, args, auth=None, prefix="", threads=20, verbose=False):
         self.conn = conn
         self.args = args
         self.auth = auth
         self.prefix = prefix
         self.filecount = 0
         self.dircount = 0
+        self.threads = threads
+        self.verbose = verbose
 
     def get_hashid(self, hexhash):
         self.conn.execute("INSERT or IGNORE INTO hashes (hash) VALUES (?);", (hexhash,))
@@ -150,7 +158,7 @@ class Scanner(object):
             mtime = time.mktime(zi.date_time + (0,0,0))
             self.insert_file(root=root, path=path+"/"+zi.filename, mtime=mtime, file_size=zi.file_size, handle=zf.open(zi.filename,"r"))
 
-    def ingest_start(self):
+    def ingest_start(self, rootw):
         print("ingest_start")
         self.scanid = self.get_scanid(timet_iso())
 
@@ -391,6 +399,14 @@ class MySQLS3Scanner(MySQLScanner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,**kwargs)
 
+    def log(self, *, scanid, message):
+        try:
+            self.conn.csfr(self.auth,
+                            "INSERT INTO `{db}`.{prefix}logs (scanid, message)"
+                            " VALUES (%s,%s)".format(db=self.args.db, prefix=self.prefix),
+                            [scanid, message])
+        except Exception as e:
+            print("An error occurred when logging: ", e)
 
     def insert_file(self, *, path, root, mtime, file_size, handle=None, hexdigest=None):
         """@mtime in time_t"""
@@ -410,24 +426,106 @@ class MySQLS3Scanner(MySQLScanner):
         
         if self.args.vfiles:
             print("{} {}".format(path, file_size))
+
+    def batch_insert_file(self, *, root, objects): # root, mtime, file_size, handle=None, hexdigest=None):
+        """@mtime in time_t"""
+        if len(objects) == 0:
+            return
+        values = []
+        for obj in objects:
+            pathid = self.get_pathid(obj['Key'])
+            rootid = self.get_rootid(root)
+
+
+            obj['mtime'] = None
+            try:
+                obj['mtime'] = int(datetime.datetime.strptime(str(obj['LastModified'])[0:19], '%Y-%m-%dT%H:%M:%S').timestamp())
+            except ValueError as e:
+                obj['mtime'] = int(datetime.datetime.strptime(str(obj['LastModified'])[0:19], '%Y-%m-%d %H:%M:%S').timestamp())
+
+            try:
+                hashid = self.get_file_hashid(pathid=pathid, mtime=obj['mtime'], file_size=obj['Size'], f=None, hexdigest=obj['ETag'])
+            except PermissionError as e:
+                return
+            except OSError as e:
+                return
+
+            
+            if self.args.vfiles:
+                print("{} {}".format(obj['Key'], obj['Size']))
+            values.append(str((pathid, rootid, obj['mtime'],
+                                    int(obj['Size']), hashid, int(self.scanid))))
+        query = "INSERT INTO `{db}`.{prefix}files (pathid,rootid,mtime,size,hashid,scanid) VALUES {values}"
+        self.conn.csfr(self.auth, query.format(db=self.args.db, prefix=self.prefix,
+                                values=str(values).replace("[", "").replace("]","").replace("'","")))
+            
+
+    
         
 
     def ingest_walk(self, root):
             """Scan S3"""
             from ctools import s3
             (bucket,key) = s3.get_bucket_key(root)
-            for obj in s3.list_objects(bucket,key):
-            # for obj in s3.search_objects(bucket, name=""):
-                # {'LastModified': '2019-03-28T21:36:51.000Z', 
-                #   'ETag': '"46610609053db79a94c4bd29cad8f4ff"', 
-                #   'StorageClass': 'STANDARD', 
-                #   'Key': 'a/b/c/whatever.txt', 
-                #   'Size': 31838630}
-                mtime = int(datetime.datetime.strptime(obj['LastModified'][0:19], '%Y-%m-%dT%H:%M:%S').timestamp())
-                self.insert_file( path=obj['Key'], root=root, mtime=mtime, file_size=obj['Size'], hexdigest=obj['ETag'] )
-                self.filecount += 1
+            t0 = t1 = None
+            if self.verbose:
+                t0 = datetime.datetime.now()
+                print("STARTING WALK...", str(t0))
+            s3objects = s3.mt_list_objects(bucket, verbose=self.verbose, threads=self.threads, scanid=self.scanid, callback=self.log)
+            if self.verbose:
+                t1 = datetime.datetime.now()
+                print("END WALK...", str(t1))
+                elapsedTime = t1 - t0
+                duration = elapsedTime / timedelta(minutes=1)
+                print("WALK DURATION:", duration)
+            split = 1
+            if len(s3objects) > self.threads:
+                split = int(len(s3objects) / self.threads)
+            if split > MAX_BATCH_SIZE:
+                split = MAX_BATCH_SIZE
+            q = queue.Queue()
+
+            def process_chunk():
+                if self.verbose:
+                    print(threading.current_thread(), "started...")
+                while True:
+                    chunk = q.get()
+                    if chunk is None:
+                        break
+                    try:
+                        self.batch_insert_file(root=root,objects=chunk)
+                        self.filecount+=len(chunk)
+                    except Exception as e:
+                        print(threading.current_thread(), e)
+                    q.task_done()
+                if self.verbose:
+                    print(threading.current_thread(), "finished up...")
+
+
+            if self.verbose:
+                print("partitioning filesystem jobs...")
+            # Try multiprocessing manager
+            # https://docs.python.org/2/library/multiprocessing.html
+            while len(s3objects) > 0:
+                process_list = s3objects[:split]
+                s3objects = s3objects[split:]
+                q.put(process_list)
                 if (self.args.limit is not None) and (self.filecount > self.args.limit):
                     return
                 if self.filecount %100==0:
                     self.conn.commit()
+            
+            if self.verbose:
+                print("starting threads")
+            thread_pool = []
+            for i in range(self.threads):
+                t = threading.Thread(target=process_chunk)
+                t.start()
+                thread_pool.append(t)
+            q.join() # wait for all processes to be done
+
+            for i in range(len(thread_pool)):
+                q.put(None)
+            for thread in thread_pool:
+                thread.join()
             print("Scan S3: ",root)
