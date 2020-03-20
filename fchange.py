@@ -115,9 +115,12 @@ CREATE TABLE `{dbname}`.{prefix}logs (logid INTEGER PRIMARY KEY AUTO_INCREMENT,
                                 scanid INTEGER REFERENCES {prefix}scans(scanid),
                                 message TEXT(65536));
 CREATE INDEX logs_idx1 ON `{dbname}`.{prefix}logs(scanid);
-CREATE INDEX logs_idx2 ON `{dbname}`.{prefix}logs(time);
-CREATE INDEX logs_idx3 ON `{dbname}`.{prefix}logs(scanid,logtime);
 
+DROP TABLE IF EXISTS `{dbname}`.{prefix}delete_file_request;
+CREATE TABLE `{dbname}`.{prefix}delete_file_request (requestid INTEGER PRIMARY KEY AUTO_INCREMENT,
+                                fileid INTEGER REFERENCES {prefix}scans(scanid),
+                                request_time INTEGER NOT NULL);
+CREATE INDEX delfile_idx ON `{dbname}`.{prefix}delete_file_request(request_time);
 
 """
 
@@ -425,7 +428,7 @@ class MySQLFileChangeManager(FileChangeManager):
 
     def list_scans(self):
         results = self.conn.csfr(self.auth,
-                                 "SELECT scanid, time, rootid, rootdir FROM `{db}`.{prefix}scans NATURAL JOIN `{db}`.roots".format(
+                                 "SELECT scanid, time, rootid, rootdir FROM `{db}`.{prefix}scans NATURAL JOIN `{db}`.{prefix}roots".format(
                                      db=self.database, prefix=self.prefix))
         for (scanid, time, rootid, rootdir) in results:
             print(scanid, rootdir, time)
@@ -790,6 +793,7 @@ if __name__ == "__main__":
     parser.add_argument("--out", help="Specifies output filename")
     parser.add_argument("--vfiles", help="Report each file as ingested", action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested", action="store_true")
+    parser.add_argument("--live", help="Will add the live search as a cron job after running a full bucket scan", action="store_true")
     parser.add_argument("--limit", help="Only search this many", type=int)
     parser.add_argument("--threads", help="Number of concurrent threads to use.", default=20, type=int)
     parser.add_argument("--verbose", help="Extra output during runtime", action='store_true')
