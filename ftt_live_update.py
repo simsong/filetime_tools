@@ -143,9 +143,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Compute file changes',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        "--config", help="Specify configuration file")
-    parser.add_argument(
-        "--url", help="Specify Queue URL")
+        "--config", help="Specify configuration file", default="dbroot.bash")
 
     args = parser.parse_args()
 
@@ -155,7 +153,7 @@ if __name__ == "__main__":
 
     if args.config:
         config = get_vars(args.config)
-        host = user = password = database = prefix = ""
+        host = user = password = database = prefix = url = ""
         if 'MYSQL_HOST' in config:
             host = config['MYSQL_HOST']
         if 'MYSQL_USER' in config:
@@ -166,6 +164,8 @@ if __name__ == "__main__":
             database = config['MYSQL_DATABASE']
         if 'MYSQL_PREFIX' in config:
             prefix = config['MYSQL_PREFIX']
+        if 'FTT_QUEUE_URL' in config:
+            url = config['FTT_QUEUE_URL']
 
         auth = DBMySQLAuth(host=host,
                            user=user,
@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
         # set up client and request 10 messages
         response = client.receive_message(
-            QueueUrl=args.url,
+            QueueUrl=url,
             AttributeNames=[
                 'All',
             ],
@@ -246,7 +246,7 @@ if __name__ == "__main__":
                     logging.warning("s3 message not found")
 
         # Now delete the things that were retrieved from the queue.
-        # print("TO DELETE:", recieved_messages)
+        print("deleting messages from queue...")
         entries = []
         unique_ids = set()
         for i, entry in enumerate(recieved_messages):
@@ -269,7 +269,11 @@ if __name__ == "__main__":
                 exit(1)
         
     # Add or Remove the values
+    print("uploading files to db...")
     for obj in objects_to_add:
         # TODO: FINISH DELETED FILES TABLE
         # TODO: make this a bit easier to read/understand: 1,2,3... don't really say anything about what those items are
         update_file(auth, db, prefix, action=obj[0], key=obj[1], eventTime=obj[2], size=obj[3], etag=obj[4])
+
+
+    print("DONE!")
