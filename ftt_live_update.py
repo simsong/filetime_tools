@@ -89,15 +89,16 @@ def update_file(auth: DBMySQLAuth, db: DBMySQL, prefix, *, action, key, eventTim
     newest_scan, rootid = get_recent_scan(auth, db, prefix, datetime.datetime.now())
     # 'fileid','rootid','dirnameid','mtime','size','rootdir','dirname','filename'
     # check to see if file is in the system
-    sql = """SELECT fileid, mtime FROM `{db}`.{prefix}filenames 
-    LEFT JOIN {prefix}paths
-    ON {prefix}paths.filenameid = {prefix}filenames.filenameid 
-    LEFT JOIN {prefix}files 
-    ON {prefix}paths.pathid = {prefix}files.pathid 
-    WHERE scanid={newest_scan} and filename='{key}'
+    sql = """
+    SELECT fileid, mtime FROM `{db}`.{prefix}files 
+    NATURAL JOIN {prefix}paths 
+    NATURAL JOIN {prefix}dirnames 
+    NATURAL JOIN {prefix}filenames 
+    WHERE scanid={newest_scan} AND dirname='{dirname}' AND filename='{filename}'
     """.format(
         db=auth.database, prefix=prefix,
-        newest_scan=newest_scan, key=key)
+        newest_scan=newest_scan, dirname=dirname, filename=filename)
+    
     result = db.csfr(auth, sql)
 
     if action == CREATE:
@@ -128,11 +129,13 @@ def update_file(auth: DBMySQLAuth, db: DBMySQL, prefix, *, action, key, eventTim
     else:
         if len(result) == 0:
             # ignore, it's trying to delete a file that doesn't exist
-            pass
+            print("attempting to delete file that doesn't exist")
         else:
+            print("delete file that exists")
             # log a deletion in the deleted_files table
-            eventTime = int(datetime.datetime.strptime(eventTime, '%Y-%m-%dT%H:%M:%S').timestamp())
-            db.csfr(auth, "INSERT INTO `{db}`.{prefix}delete_file_request (fileid, mtime) "
+            result = result[0]
+            eventTime = int(datetime.datetime.strptime(eventTime[0:19], '%Y-%m-%dT%H:%M:%S').timestamp())
+            db.csfr(auth, "INSERT INTO `{db}`.{prefix}delete_file_request (fileid, request_time) "
                     "VALUES (%s,%s)".format(
                         db=auth.database, prefix=prefix), vals=[result[0], int(eventTime)])
 
@@ -174,6 +177,7 @@ if __name__ == "__main__":
         db = DBMySQL(auth)
     else:
         print("No configuration defined.")
+        exit(1)
 
     # update_file(auth, db, prefix, "CREATE", "part-00000","2020-03-19T17:49:50.396Z", "size", "etag")
     # exit(0)
@@ -239,9 +243,10 @@ if __name__ == "__main__":
                         etag = record['s3']['object']['eTag']
                         size = record['s3']['object']['size']
                     key = record['s3']['object']['key']
-                    objects_to_add.add(
-                        (eventType, key, eventTime, size, etag)
-                    )
+
+                    new_object = (eventType, key, eventTime, size, etag)
+                    objects_to_add.add(new_object)
+                    print("new object:", new_object)
                 else:
                     logging.warning("s3 message not found")
 
@@ -260,7 +265,7 @@ if __name__ == "__main__":
                 )
         if len(entries) > 0:
             response = client.delete_message_batch(
-                QueueUrl=args.url,
+                QueueUrl=url,
                 Entries=entries
             )
 
