@@ -11,6 +11,7 @@ import sys
 import os
 import re
 import datetime
+import logging
 
 debug = False
 
@@ -23,13 +24,14 @@ skip_pats = [re.compile("[0-9a-f]{16,}",re.I), # 16 hex digits
 ymd_pats = [re.compile(r"[^\d]([12]\d\d\d)-([0-1]\d)-([0-3]\d)[^\d]")]  # YYYY-MM-DD
 
 mdy_pats  = [re.compile("[^0-9]([0-1][0-9])[.]?([0-3][0-9])[.]?(([12][90])?[89012][0-9])[^0-9]"), # MMDDYYYY
-        re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.](19[89][0-9])[^0-9]"), # MM.DD.19YY    
-        re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.]([89][0-9])[^0-9]"), # MM.DD.YY    
-        re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.](20[012][0-9])[^0-9]"), # MM.DD.20YY    
-        re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.]([012][0-9])[^0-9]"), # MM.DD.YY    
-        re.compile("[^0-9]([0-9])[.]([0-3][0-9])[.]([89012][0-9])[^0-9]"), # M.DD.YY     (people who are careless)
-        re.compile("[^0-9]([0-1][0-9])[.]([0-9])[.]([89012][0-9])[^0-9]"), # MM.D.YY     (people who are careless)
-        re.compile("[^0-9]([0-9])[.]([0-9])[.]([89012][0-9])[^0-9]") # M.D.YY           (people who are careless)
+             re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.](19[89][0-9])[^0-9]"), # MM.DD.19YY    
+             re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.]([89][0-9])[^0-9]"), # MM.DD.YY    
+             re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.](20[012][0-9])[^0-9]"), # MM.DD.20YY    
+             re.compile("[^0-9]([0-1][0-9])[.]([0-3][0-9])[.]([012][0-9])[^0-9]"), # MM.DD.YY    
+             re.compile("[^0-9]([0-1]?[0-9])-([0-3]?[0-9])-([012][0-9])[^0-9]"), # MM-DD-YY , M-D-YY (apple)
+             re.compile("[^0-9]([0-9])[.]([0-3][0-9])[.]([89012][0-9])[^0-9]"), # M.DD.YY     (people who are careless)
+             re.compile("[^0-9]([0-1][0-9])[.]([0-9])[.]([89012][0-9])[^0-9]"), # MM.D.YY     (people who are careless)
+             re.compile("[^0-9]([0-9])[.]([0-9])[.]([89012][0-9])[^0-9]") # M.D.YY           (people who are careless)
         ]
 
 
@@ -152,7 +154,7 @@ new name, or None if no rename is necessary."""
         if m:
             month = MONTHS[m.group(1)]
             year  = int(m.group(2))
-            print("month=",month,"year=",year)
+            #print("month=",month,"year=",year)
             basename_new = basename.replace(m.group(1),"MONTH").replace(m.group(2),"YEAR")
             basename_new = basename_new.replace("MONTH YEAR","YEAR-MONTH")
             basename_new = basename_new.replace("MONTH.YEAR","YEAR-MONTH")

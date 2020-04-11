@@ -32,6 +32,15 @@ Currently, you need to put both dir1 and dir2 into a single directory:
     python3 fchange.py --db mydb.db --create dir3
     python3 fchange.py --db mydb.db --dups
 
+## Scan DIR1 and print the SH1 codes of every file with SQLite3
+   python3 fchange.py --sqlite3db mydb.db --addroot DIR1
+   python3 fchange.py --sqlite3db mydb.db --dump
+
+## Scan DIR1 and DIR2 and delete files in DIR2 that are *anywhere* in DIR1 using sqlite3
+   python3 fchange.py --sqlite3db mydb.db --addroot DIR1
+   python3 fchange.py --sqlite3db mydb.db --addroot DIR2
+
+
 ## Find all of the JPEGs in a directory hiearchy
 
     python3 fchange.py --db images.db --create ~/Photos/         

@@ -40,7 +40,21 @@ def file_exif_time(fn, allexif=False):
     if exif:
         for tag in EXIF_TIME_TAGSET:
             if (tag in exif) and (exif[tag]):
-                return datetime.datetime.strptime(exif[tag],"%Y:%m:%d %H:%M:%S")
+                try:
+                    return datetime.datetime.strptime(exif[tag],"%Y:%m:%d %H:%M:%S")
+                except ValueError as e:
+                    print(e)
+                    pass
+                try:
+                    return datetime.datetime.strptime(exif[tag],"%Y:%m:%d:%H:%M:%S")
+                except ValueError as e:
+                    print(e)
+                    pass
+                try:
+                    return datetime.datetime.strptime(exif[tag],"%Y.%m.%d %H.%M.%S")
+                except ValueError as e:
+                    print(e)
+                    pass
     return None
 
 def jpeg_set_exif_times(fn,date):
@@ -50,14 +64,16 @@ def jpeg_set_exif_times(fn,date):
         return
     out = subprocess.check_output(cmd,encoding='utf-8')
     if "contains no Exif timestamp to change" in out:
-        print("adding exif")
+        if args.debug:
+            print("adding exif")
         subprocess.run([cmd[0],'-mkexif'] + cmd[1:], check=True)
 
 
 def rename_file_logic(fn, base):
     """Return a new filename for fn, or None if it cannot be renamed"""
     when = file_exif_time(fn)
-    print(fn,when,type(when))
+    if args.dump:
+        print(fn,when,type(when))
     if not when:
         print(f"NO exif: {fn}")
         return None
@@ -105,7 +121,8 @@ def process_file(fn, dry_run=False, allexif=False):
 
     # If we were asked to set time utimes, do so
     exif_time  = file_exif_time(fn)
-    print("file_exif_time({})={}".format(fn,exif_time))
+    if args.debug:
+        print("file_exif_time({})={}".format(fn,exif_time))
     if exif_time and args.year:
         exif_time = exif_time.replace(year=args.year)
         jpeg_set_exif_times(fn,exif_time)
@@ -155,7 +172,7 @@ if __name__=="__main__":
     parser.add_argument("--dry-run", help="don't actually change anything", action='store_true')
     parser.add_argument("--base", help="string to prepend to each filename", default='')
     parser.add_argument("--info", help="Just print exif info for each image", action='store_true')
-    parser.add_argument("--verbose", help="print lots of stuff")
+    parser.add_argument("--debug", help="print lots of stuff")
     parser.add_argument("--txt",  help="If there is a filename.txt that matches filename.jpg, put the .txt's contents into the jpg as exif comments, and then delete the .txt", action='store_true')
     parser.add_argument("--rmdupcolor", help="Look for all JPEGs that have the same *name* in different directories. Delete the duplicate name if the two have different color profiles and if one has color profile XXX", action='store_true')
     parser.add_argument("--dump", action='store_true', help='dump EXIF for every file')

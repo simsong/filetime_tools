@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # coding=UTF-8
 #
-# File change detector
+"""
+File change detector class.
+Contains implementations for SQLite3 and MySQL.
+Needs more self-tests.
+"""
 
 __version__ = '0.0.1'
 import os.path
@@ -13,10 +17,12 @@ from ctools.dbfile import *
 from ctools.tydoc import *
 import configparser
 
-CACHE_SIZE = 2000000
-SQL_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
+# We don't use an object relation mapper (ORM) because the performance was just not there.
+# However, we should migrate as much here as possible to the ctools/dbfile class
 
-# Replace this with an ORM?
+SQLITE3_CACHE_SIZE = 2000000
+SQLLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(SQLITE3_CACHE_SIZE)
+
 SQLITE3_SCHEMA = \
     """
 CREATE TABLE IF NOT EXISTS metadata (key VARCHAR(255) PRIMARY KEY,value VARCHAR(255) NOT NULL);
@@ -57,8 +63,7 @@ CREATE INDEX IF NOT EXISTS scans_idx1 ON scans(scanid);
 CREATE INDEX IF NOT EXISTS scans_idx2 ON scans(time);
 """
 
-MYSQL_SCHEMA = \
-    """
+MYSQL_SCHEMA = """
 DROP TABLE IF EXISTS `{dbname}`.{prefix}metadata;
 CREATE TABLE  `{dbname}`.{prefix}metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255) NOT NULL);
 
@@ -111,7 +116,7 @@ CREATE INDEX  files_idx7 ON `{dbname}`.{prefix}files(scanid,hashid);
 """
 
 """Explanation of tables:
-files         - list of all files
+files        - list of all files
 hashes       - table of all hash code
 """
 
@@ -171,10 +176,6 @@ class FileChangeManager(ABC):
         pass
 
     @abstractmethod
-    def get_root(self):
-        pass
-
-    @abstractmethod
     def get_roots(self):
         pass
 
@@ -186,9 +187,9 @@ class FileChangeManager(ABC):
     def del_root(self, root):
         pass
 
-    # @abstractmethod
-    # def create_database(self, name, root):
-    #     pass
+    @abstractmethod
+    def create_database(self, name, root):
+        pass
 
 
 class SQLite3FileChangeManager(FileChangeManager):
@@ -389,9 +390,6 @@ class SQLite3FileChangeManager(FileChangeManager):
             dump_dictionary(fp, "dirnameids", dirnameids)
             dump_dictionary(fp, "filenameids", filenameids)
             dump_dictionary(fp, "fileids", fileids)
-
-    def get_root(conn):
-        return SLGSQL.execselect(conn, "SELECT value FROM metadata WHERE key='root'")[0]
 
     # def create_database(name, root):
     #     if os.path.exists(name):
@@ -700,17 +698,11 @@ class MySQLFileChangeManager(FileChangeManager):
             dump_dictionary(fp, "filenameids", filenameids)
             dump_dictionary(fp, "fileids", fileids)
 
-    def get_root(self):
-
-        result = self.conn.csfr(auth,
-                                "SELECT value FROM `{db}`.{prefix}metadata WHERE name='root'".format(db=self.database,
-                                                                                                     prefix=self.prefix))
-        return result[0][0]
-
     def get_roots(self):
-        roots = self.conn.csfr(auth,
-                               "SELECT rootdir FROM `{db}`.{prefix}roots".format(db=self.database, prefix=self.prefix))
-        return roots
+        """Return a list of the roots in the database."""
+        rows = self.conn.csfr(auth,
+                              "SELECT rootdir FROM `{db}`.{prefix}roots".format(db=self.database, prefix=self.prefix))
+        return [row[0] for row in rows]
 
     def add_root(self, root):
         try:
@@ -730,7 +722,7 @@ class MySQLFileChangeManager(FileChangeManager):
             print("Could not delete root: {} \n ".format(root), e)
 
 
-def create_mysql_database(auth, args, schema):
+def create_mysql_database(auth, args, schema, prefix):
     try:
         import mysql.connector as mysql
         internalError = RuntimeError
@@ -750,7 +742,7 @@ def create_mysql_database(auth, args, schema):
     c = conn.cursor()
     c.execute("CREATE DATABASE IF NOT EXISTS {}".format(args.db))
     # schema = schema.replace("filetime_tools", args.db)
-    schema = schema.format(dbname=args.db, prefix=args.prefix)
+    schema = schema.format(dbname=args.db, prefix=prefix)
     for line in schema.split(";"):
         line = line.strip()
         if len(line) > 0:
@@ -765,15 +757,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Compute file changes',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--create", help="Create a database for a given ROOT", action='store_true')
-    parser.add_argument("--db", help="Specify database location")  # needs to be removed (outdated)
-    parser.add_argument("--prefix", help="Specify table prefix to sue", default="")  # needs to be removed (outdated)
-    parser.add_argument("--config", help="Specify configuration file", default="default.ini")
+    g = parser.add_mutually_exclusive_group(required=True)
+    g.add_argument("--sqlite3db", help="Specify sqlite3db file")  
+    g.add_argument("--config", help="Specify configuration for MySQL info file", default=None)
+    parser.add_argument("--create", help="Create a database", action='store_true')
     parser.add_argument("--scans", help="List the scans in the DB", action='store_true')
-    parser.add_argument("--root", help="List the root in the DB", action='store_true')  # (outdated)
     parser.add_argument("--roots", help="List all roots in the DB", action='store_true')  # initial root?
     parser.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     parser.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
+    parser.add_argument("--dump",   help='Dump the last scan in a standard form', action='store_true')
     parser.add_argument("--dups", help="Report duplicates for most recent scan", action='store_true')
     parser.add_argument("--dupsize", help="Don't report dups smaller than dupsize", default=1024 * 1024, type=int)
     parser.add_argument("--out", help="Specifies output filename")
@@ -782,13 +774,15 @@ if __name__ == "__main__":
     parser.add_argument("--limit", help="Only search this many", type=int)
     parser.add_argument("--addroot", help="Add a new root", type=str)
     parser.add_argument("--delroot", help="Delete an existing root", type=str)
+    parser.add_argument("--scan", help="Initiate a scan", action='store_true')
+    
     args = parser.parse_args()
 
     fchange = None
     auth = None
-    config = configparser.ConfigParser()
 
     if args.config:
+        config = configparser.ConfigParser()
         config.read(args.config)
         auth = DBMySQLAuth(host=config["MYSQL_SERVER"]["HOST"] if config["MYSQL_SERVER"]["HOST"] is not None else "",
                            user=config["MYSQL_SERVER"]["USER"] if config["MYSQL_SERVER"]["USER"] is not None else "",
@@ -796,40 +790,30 @@ if __name__ == "__main__":
                                                                               "PASSWORD"] is not None else "",
                            database=config["MYSQL_SERVER"]["DATABASE"] if config["MYSQL_SERVER"][
                                                                               "DATABASE"] is not None else "")
-        args.db = auth.database
-        args.prefix = config["DEFAULT"]["TABLE_PREFIX"]
-    else:
-        pass
-
-    if args.create:
-        try:
-            create_mysql_database(auth, args, MYSQL_SCHEMA)
-            print("Created {}".format(args.db))
-        except Exception as e:
-            print("An error occured when attempting to create the database: ", e)
-    elif args.create:
-        # create an sqlite3 db
-        pass
-
-    if args.db:
-        if args.db.endswith(".sqlite3"):
+        prefix = config["DEFAULT"]["TABLE_PREFIX"]
+        if args.create:
             try:
-                # open database and give me a big cache
-                conn = sqlite3.connect(args.db)
-                conn.row_factory = sqlite3.Row
-                conn.cursor().execute(SQL_SET_CACHE)
-                fchange = SQLite3FileChangeManager(conn)
-            except sqlite3.OperationalError as e:
-                print("Unable to open db file {args.db}", e)
-                exit(1)
-        else:
-            try:
-                # auth = DBMySQLAuth.FromEnv(args.config)
-                conn = DBMySQL(auth)
-                fchange = MySQLFileChangeManager(conn, auth, args.db, args.prefix)
+                create_mysql_database(auth, args, MYSQL_SCHEMA, prefix)
+                print("Created {}".format(args.db))
             except Exception as e:
-                print("Could not connect to MySQL server: ", e)
-                exit(1)
+                print("An error occured when attempting to create the database: ", e)
+        try:
+            # auth = DBMySQLAuth.FromEnv(args.config)
+            conn = DBMySQL(auth)
+            fchange = MySQLFileChangeManager(conn, auth, args.db, prefix)
+        except Exception as e:
+            print("Could not connect to MySQL server: ", e)
+            exit(1)
+    elif args.sqlite3db:
+        try:
+            # open database and give me a big cache
+            conn = sqlite3.connect(args.sqlite3db)
+            conn.row_factory = sqlite3.Row
+            conn.cursor().execute(SQLITE3_SET_CACHE)
+            fchange = SQLite3FileChangeManager(conn)
+        except sqlite3.OperationalError as e:
+            print("Unable to open db file {args.sqlite3db}", e)
+            exit(1)
 
     if args.addroot:
         fchange.add_root(args.addroot)
@@ -845,16 +829,8 @@ if __name__ == "__main__":
         fchange.list_scans()
         exit(0)
 
-    if args.root:
-        roots = fchange.get_roots()
-        for root in roots:
-            print(root)
-        exit(0)
-
     if args.roots:
-        roots = fchange.get_roots()
-        for root in roots:
-            print(root)
+        print("\n".join(fchange.get_roots()))
         exit(0)
 
     if args.report:
@@ -867,17 +843,18 @@ if __name__ == "__main__":
         fchange.jreport()
     elif args.dups:
         fchange.report_dups(fchange.last_scan())
-    else:
-        # root = fchange.get_root()
+    elif args.scan:
         for root in fchange.get_roots():
-            root = root[0]
             print("Scanning: {}".format(root))
             if root.startswith("s3://") and args.db.endswith(".sqlite3"):
                 sc = scanner.S3Scanner(fchange.conn, args, auth)
             elif root.startswith("s3://"):
-                sc = scanner.MySQLS3Scanner(conn, args, auth, args.prefix)
+                sc = scanner.MySQLS3Scanner(conn, args, auth, prefix)
             elif args.db.endswith(".sqlite3"):
                 sc = scanner.Scanner(conn, args, auth)
             else:
-                sc = scanner.MySQLScanner(conn, args, auth, args.prefix)
+                sc = scanner.MySQLScanner(conn, args, auth, prefix)
             sc.ingest(root)
+    else:
+        parser.print_help()
+            
