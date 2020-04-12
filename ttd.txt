@@ -1,2 +1,11 @@
+Problems with previous code:
+- Didn't use the default database, instead the databse name was specified on every INSERT/SELECT. 
+
+Never do this:
+  from ctools.dbfile import *
+  from ctools.tydoc import *
+
+Never import "*" in production code
+
 https://testdriven.io/blog/developing-an-asynchronous-task-queue-in-python/
 https://awstats.sourceforge.io/docs/index.html

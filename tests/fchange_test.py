@@ -6,13 +6,12 @@ from dbfile import SLGSQL
 
 def test_create_database_sqlite3():
     """Test to make sure that the create database feature works"""
-    fname = tempfile.mktemp()
-
-    fcm = fchange.SQLite3FileChangeManager()
+    with tempfile.NamedTemporaryFile(suffix='.dbfile') as tf:
+        fcm = fchange.SQLite3FileChangeManager(fname=tf.name)
     
+        fcm.create_database()
+        fcm.add_root("test/")
+        del fcm
 
-    fchange.create_database(fname,"test/")
-    assert os.path.exists(fname)
-    conn = sqlite3.connect(fname)
-    conn.row_factory = sqlite3.Row
-    assert get_root(conn)=="test/"
+        fcm = fchange.SQLite3FileChangeManager(fname=tf.name)
+        assert fcm.get_roots() == ["test/"]
