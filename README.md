@@ -7,8 +7,8 @@ filetime_tools is a collection of programs for working with files and timestamps
 * Change the EXIF in JPEGs to be consistent with the timestamp in the file's name.
 * Change the name of a JPEG to be consistent with its EXIF timestamp
 
-# Configuration
-By default, `fchange.py` will look to the `default.ini` file for MySQL authentication credentials.
+# MySQL Configuration
+By default, `fchange.py` will look to the `default.ini` file for MySQL authentication credentials. Please see the file `default.ini.DIST` for how to fill out this file with your MySQL credentials.
 
 You can specify a different configuration file with the `--config [path to configuration file]` flag.
 

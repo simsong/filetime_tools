@@ -17,6 +17,10 @@ from ctools.dbfile import DBSqlite3,DBMySQLAuth,DBMySQL
 from ctools.tydoc import *
 import configparser
 
+MYSQL_SERVER_SECTION="mysql_server"
+FCHANGE_SECTION="fchange"
+TABLE_PREFIX="table_prefix"
+
 # We don't use an object relation mapper (ORM) because the performance was just not there.
 # However, we should migrate as much here as possible to the ctools/dbfile class
 
@@ -68,35 +72,35 @@ CREATE INDEX IF NOT EXISTS scans_idx2 ON scans(time);
 
 MYSQL_SCHEMA = """
 DROP TABLE IF EXISTS {prefix}metadata;
-CREATE TABLE  {prefix}metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255) NOT NULL);
+CREATE TABLE  {prefix}metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255) NOT NULL) character set utf8;
 
 DROP TABLE IF EXISTS {prefix}roots;
-CREATE TABLE {prefix}roots (rootid INTEGER PRIMARY KEY AUTO_INCREMENT, rootdir VARCHAR(255) UNIQUE NOT NULL);
+CREATE TABLE {prefix}roots (rootid INTEGER PRIMARY KEY AUTO_INCREMENT, rootdir VARCHAR(255) UNIQUE NOT NULL) character set utf8;
 
 DROP TABLE IF EXISTS {prefix}dirnames;
-CREATE TABLE  {prefix}dirnames (dirnameid INTEGER PRIMARY KEY AUTO_INCREMENT,dirname TEXT(65536));
-CREATE UNIQUE INDEX  dirnames_idx2 ON {prefix}dirnames (dirname(700));
+CREATE TABLE  {prefix}dirnames (dirnameid INTEGER PRIMARY KEY AUTO_INCREMENT,dirname TEXT(65536)) character set utf8;
+CREATE UNIQUE INDEX  dirnames_idx2 ON {prefix}dirnames (dirname(255));
 
 DROP TABLE IF EXISTS {prefix}filenames;
-CREATE TABLE  {prefix}filenames (filenameid INTEGER PRIMARY KEY AUTO_INCREMENT,filename TEXT(65536));
-CREATE INDEX  filenames_idx2 ON {prefix}filenames (filename(700));
+CREATE TABLE  {prefix}filenames (filenameid INTEGER PRIMARY KEY AUTO_INCREMENT,filename TEXT(65536)) character set utf8;
+CREATE INDEX  filenames_idx2 ON {prefix}filenames (filename(255));
 
 DROP TABLE IF EXISTS {prefix}paths;
 CREATE TABLE  {prefix}paths (pathid INTEGER PRIMARY KEY AUTO_INCREMENT,
        dirnameid INTEGER REFERENCES {prefix}dirnames(dirnameid),
-       filenameid INTEGER REFERENCES {prefix}filenames(filenameid));
+       filenameid INTEGER REFERENCES {prefix}filenames(filenameid)) character set utf8;
 CREATE INDEX  paths_idx2 ON {prefix}paths(dirnameid);
 CREATE INDEX  paths_idx3 ON {prefix}paths(filenameid);
 
 DROP TABLE IF EXISTS {prefix}hashes;
-CREATE TABLE  {prefix}hashes (hashid INTEGER PRIMARY KEY AUTO_INCREMENT,hash TEXT(65536) NOT NULL);
+CREATE TABLE  {prefix}hashes (hashid INTEGER PRIMARY KEY AUTO_INCREMENT,hash TEXT(65536) NOT NULL) character set utf8;
 CREATE INDEX  hashes_idx2 ON {prefix}hashes( hash(700));
 
 DROP TABLE IF EXISTS {prefix}scans;
 CREATE TABLE  {prefix}scans (scanid INTEGER PRIMARY KEY AUTO_INCREMENT,
                                       rootid INTEGER REFERENCES {prefix}roots(rootid),
                                       time DATETIME NOT NULL,
-                                      duration INTEGER);
+                                      duration INTEGER) character set utf8;
 CREATE INDEX  scans_idx1 ON {prefix}scans(scanid);
 CREATE INDEX  scans_idx2 ON {prefix}scans(time);
 CREATE UNIQUE INDEX scans_idx3 ON {prefix}scans(rootid,time);
@@ -108,7 +112,7 @@ CREATE TABLE  {prefix}files (fileid INTEGER PRIMARY KEY AUTO_INCREMENT,
                                   mtime INTEGER NOT NULL, 
                                   size INTEGER NOT NULL, 
                                   hashid INTEGER REFERENCES {prefix}hashes(hashid), 
-                                  scanid INTEGER REFERENCES {prefix}scans(scanid));
+                                  scanid INTEGER REFERENCES {prefix}scans(scanid)) character set utf8;
 CREATE INDEX  files_idx1 ON {prefix}files(pathid);
 CREATE INDEX  files_idx2 ON {prefix}files(rootid);
 CREATE INDEX  files_idx3 ON {prefix}files(mtime);
@@ -410,9 +414,11 @@ class SQLite3FileChangeManager(FileChangeManager):
 class MySQLFileChangeManager(FileChangeManager):
     def __init__(self, *, auth, prefix=""):
         self.auth     = auth
-        self.db       = DBMySQL(auth)
-        self.database = database
-        super().__init__(prefix=prefix)
+        super().__init__(db=DBMySQL(auth),prefix=prefix)
+
+    def create_database(self):
+        self.db.create_schema(MYSQL_SCHEMA.format(prefix=self.prefix))
+
 
     def list_scans(self):
         results = self.db.csfr(self.auth,
@@ -703,35 +709,18 @@ class MySQLFileChangeManager(FileChangeManager):
 
 
 
-def create_mysql_database(auth, args, schema, prefix):
-    try:
-        import mysql.connector as mysql
-        internalError = RuntimeError
-    except ImportError as e:
-        try:
-            import pymysql
-            import pymysql as mysql
-            internalError = pymysql.err.InternalError
-        except ImportError as e:
-            print(
-                f"Please install MySQL connector with 'conda install mysql-connector-python' or the pure-python "
-                f"pymysql connector")
-            raise ImportError()
 
-    conn = mysql.connect(host=auth.host, user=auth.user, password=auth.password)
-
-    c = conn.cursor()
-    c.execute("CREATE DATABASE IF NOT EXISTS {}".format(args.db))
-    # schema = schema.replace("filetime_tools", args.db)
-    schema = schema.format(dbname=args.db, prefix=prefix)
-    for line in schema.split(";"):
-        line = line.strip()
-        if len(line) > 0:
-            c.execute(line)
-    # c.execute("INSERT INTO roots (rootdir) VALUES ('{rootdir}')".format(rootdir=root))
-    conn.commit()
-    conn.close()
-
+def get_MySQL_fchange(config_file):
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    print(list(config))
+    auth   = DBMySQLAuth.FromConfig(config[MYSQL_SERVER_SECTION])
+    prefix = config[FCHANGE_SECTION][TABLE_PREFIX]
+    fchange = MySQLFileChangeManager(auth=auth, prefix=prefix)
+    fchange.config = config
+    print("fchange:",fchange)
+    return fchange
+    
 
 if __name__ == "__main__":
     import argparse
@@ -763,37 +752,12 @@ if __name__ == "__main__":
     auth = None
 
     if args.config:
-        config = configparser.ConfigParser()
-        config.read(args.config)
-        auth = DBMySQLAuth(host=config["MYSQL_SERVER"]["HOST"] if config["MYSQL_SERVER"]["HOST"] is not None else "",
-                           user=config["MYSQL_SERVER"]["USER"] if config["MYSQL_SERVER"]["USER"] is not None else "",
-                           password=config["MYSQL_SERVER"]["PASSWORD"] if config["MYSQL_SERVER"][
-                                                                              "PASSWORD"] is not None else "",
-                           database=config["MYSQL_SERVER"]["DATABASE"] if config["MYSQL_SERVER"][
-                                                                              "DATABASE"] is not None else "")
-        prefix = config["DEFAULT"]["TABLE_PREFIX"]
-        if args.create:
-            try:
-                create_mysql_database(auth, args, MYSQL_SCHEMA, prefix)
-                print("Created {}".format(args.db))
-            except Exception as e:
-                print("An error occured when attempting to create the database: ", e)
-        try:
-            # auth = DBMySQLAuth.FromEnv(args.config)
-            fchange = MySQLFileChangeManager(auth=auth, adatabase=args.db, prefix=prefix)
-        except Exception as e:
-            print("Could not connect to MySQL server: ", e)
-            exit(1)
+        fchange = get_fchange(args.config)
     elif args.sqlite3db:
-        try:
-            # open database and give me a big cache
-            conn = sqlite3.connect(args.sqlite3db)
-            conn.row_factory = sqlite3.Row
-            conn.cursor().execute(SQLITE3_SET_CACHE)
-            fchange = SQLite3FileChangeManager(conn)
-        except sqlite3.OperationalError as e:
-            print("Unable to open db file {args.sqlite3db}", e)
-            exit(1)
+        fchange = SQLite3FileChangeManager(fname=args.sqlite3db)
+
+    if args.create:
+        fchange.create_database()
 
     if args.addroot:
         fchange.add_root(args.addroot)

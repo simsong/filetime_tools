@@ -1,0 +1,8 @@
+[fchange]
+table_prefix: 
+
+[mysql_server]
+mysql_host: HOSTNAME
+mysql_user: USERNAME
+mysql_password: PASSWORD
+mysql_database: DATABASE_NAME

@@ -9,3 +9,20 @@ Never import "*" in production code
 
 https://testdriven.io/blog/developing-an-asynchronous-task-queue-in-python/
 https://awstats.sourceforge.io/docs/index.html
+
+
+Re:
+	prefix = config["DEFAULT"]["TABLE_PREFIX"]
+
+Don't read from the DEFAULT section. I changed this to:
+
+        prefix = config["fchange"]["TABLE_PREFIX"]
+
+
+Why didn't you use the variable names in the config file that were defined in dbfile.py?
+MYSQL_HOST = 'MYSQL_HOST'
+MYSQL_USER = 'MYSQL_USER'
+MYSQL_PASSWORD = 'MYSQL_PASSWORD'
+MYSQL_DATABASE = 'MYSQL_DATABASE'
+
+instead, you created your own:
