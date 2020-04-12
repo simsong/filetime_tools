@@ -9,12 +9,9 @@ import sqlite3
 import zipfile
 from datetime import datetime
 
+import fchange
 from ctools.dbfile import *
 from ctools.s3 import *
-
-# SQLite3 schema
-# SQLITE3_SCHEMA = open("schema_sqlite3.sql","r").read()
-# MYSQL_SCHEMA   = open("schema_mysql.sql","r").read()
 
 CACHE_SIZE = 2000000
 SQLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
@@ -47,7 +44,7 @@ def open_zipfile(path):
         return None
 
 class Scanner(object):
-    """Class to scan a directory and store the results in the database."""
+    """Class to scan a directory and store the results in the database specified by the db class.."""
     def __init__(self, conn, args, auth=None, prefix=""):
         self.conn = conn
         self.args = args
@@ -201,7 +198,6 @@ class Scanner(object):
         self.ingest_walk(root)
         self.t1 = time.time()
         self.ingest_done(root)
-
 
 class S3Scanner(Scanner):
     def __init__(self, *args, **kwargs):

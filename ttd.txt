@@ -25,4 +25,59 @@ MYSQL_USER = 'MYSQL_USER'
 MYSQL_PASSWORD = 'MYSQL_PASSWORD'
 MYSQL_DATABASE = 'MYSQL_DATABASE'
 
-instead, you created your own:
+instead, you created your own; I changed the names you picked back.
+
+I also don't understand why you created your own mysql connection in fchange.py. I removed that.
+
+Your subclassing of the FileChangeManager to create SQLite3FileChangeManager and MySQLFileChangeManager was done without thought to encapsulation. There is a huge amount of code in common in all of the methods. You should have properly refactored the code, putting the common code in the abstract super class. Have you ever studied object oriented design? If not, I can find you an appropriate book or blog post.
+
+Have you read Fluent Python yet?
+
+
+It doesn't make sense to have an S3Scanner, a MySQLScanner, and Sqlite3 scanner. There should be two database classes and two file system classes, and there should be a database API and a file system API.
+
+Changes were made to the schema in fchange.py but not to the schema files, making them inconsistent. I deleted the schema files.
+
+
+This does literally nothing:
+
+    def list_scans(self):
+        with self.conn as c:
+            c.execute("SELECT scanid, time FROM scans")
+            results = c.fetchall()
+            for (scanid, time) in results:
+                print(scanid, time)
+
+Learn what a context manager is:
+https://book.pythontips.com/en/latest/context_managers.html
+
+It's also bad code. Use this:
+
+    def list_scans(self):
+	for (scanid, time) in self.db.csfr(self.auth, "SELECT scanid, time FROM scans"):
+            print(scanid, time)
+
+Finally, I know that most of my methods were printing, but if we do proper object oriented design, we need to separate out the model, the view and the controller. Printing was really a development and debugging tool.
+
+
+Why did you completely change get_all_files?
+
+from this:
+    def get_all_files(self, scan1):
+        """Files in scan scan1"""
+        c = self.conn.cursor()
+        c.execute("SELECT pathid, dirnameid, dirname, filenameid, filename, fileid, mtime, size "
+                  "FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames "
+                  "WHERE scanid=?", (scan1,))
+        return (DBFile(f) for f in c)
+
+to this:
+    def get_all_files(self, scan0):
+	results = self.db.csfr(self.auth,
+                                 "SELECT fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime "
+                                 "FROM {prefix}files NATURAL JOIN {prefix}paths NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames "
+                                 "WHERE scanid={scanid}".format(scanid=scan0, prefix=self.prefix))
+	for fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime in results:
+	    yield {"fileid": fileid, "pathid": pathid, "rootid": rootid, "size": size,
+                   "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid,
+                   "filename": filename, "mtime": mtime}
