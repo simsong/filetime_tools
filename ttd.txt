@@ -39,24 +39,6 @@ It doesn't make sense to have an S3Scanner, a MySQLScanner, and Sqlite3 scanner.
 Changes were made to the schema in fchange.py but not to the schema files, making them inconsistent. I deleted the schema files.
 
 
-This does literally nothing:
-
-    def list_scans(self):
-        with self.conn as c:
-            c.execute("SELECT scanid, time FROM scans")
-            results = c.fetchall()
-            for (scanid, time) in results:
-                print(scanid, time)
-
-Learn what a context manager is:
-https://book.pythontips.com/en/latest/context_managers.html
-
-It's also bad code. Use this:
-
-    def list_scans(self):
-	for (scanid, time) in self.db.csfr(self.auth, "SELECT scanid, time FROM scans"):
-            print(scanid, time)
-
 Finally, I know that most of my methods were printing, but if we do proper object oriented design, we need to separate out the model, the view and the controller. Printing was really a development and debugging tool.
 
 
@@ -91,3 +73,20 @@ OMG. Why did you use a DELETE IGNORE?
         self.db.commit()
 
 That breaks referrential integrity. You can't do that. If you want to delete a root that's in a constraint, you're doing something wrong. In this case, the roots should probably have an additional column that's 'in use' or something. Basically, you didn't properly design how to handle the dete optional. If you are using IGNORE on DELETE, you're doing something wrong.
+
+
+
+Never hard-code constants. This is bullshit:
+	    if self.filecount %100==0:
+                self.conn.commit()
+
+Especially when there was this code ealier in the file:
+
+COMMIT_RATE = 10  # commit every 10 directories
+
+You should have used
+FILE_COMMIT_RATE  = 100 # Commit every 100 files
+
+	    if self.filecount % FILE_COMMIT_RATE == 0:
+                self.conn.commit()
+

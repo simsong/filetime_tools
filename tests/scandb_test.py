@@ -27,10 +27,16 @@ def check_del_root(sdb):
     sdb.del_root( FOOBAR )
     assert sdb.get_roots() == sorted([DIR1, DIR2])
 
+def check_scan_roots(sdb):
+    sdb.scan_roots()
+    for obj in sdb.get_files(root=DIR1):
+        print(obj)
+    raise RuntimeError("FIX ME")
+
 def check_database(sdb):
     check_get_roots(sdb)
     check_del_root(sdb)
-
+    check_scan_roots(sdb)
 
 
 def test_create_database_sqlite3():

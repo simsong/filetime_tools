@@ -10,9 +10,11 @@ def test_dump_hashes():
         os.unlink(DBFILE)
     except FileNotFoundError:
         pass
+    subprocess.check_call([sys.executable, FCHANGE,'--sqlite3db',DBFILE,'--create'])
     subprocess.check_call([sys.executable, FCHANGE,'--sqlite3db',DBFILE,'--addroot','data/DIR1'])
     assert os.path.exists(DBFILE)
-    files = subproces.run([sys.executable, FCHANGE,'--sqlite3db',DBFILE,'--dump'],capture_output=True,text=True,check=True).stdout
+    files = subprocess.run([sys.executable, FCHANGE,'--sqlite3db',DBFILE,'--dump'],
+                          capture_output=True, text=True, check=True).stdout
     print("files:")
     return True
 

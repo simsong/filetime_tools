@@ -171,20 +171,81 @@ class ScanDatabase(ABC):
                      [root])
         self.db.commit()        
         
-    # Manipulate scans
-    def list_scans(self):
-        for (scanid, time) in self.csfra("SELECT scanid, time, rootid, rootdir FROM {prefix}scans NATURAL JOIN {prefix}roots"
-                                         .format(prefix=self.prefix)):
-            print(scanid, rootdir, time)
+    # Database manipulation routines for scanner class
+    def get_hashid(self, hexhash):
+        """Given a hex hash code, return the hashid (an integer)"""
+        self.db.csfr(f"INSERT IGNORE INTO {self.prefix}hashes (hash) VALUES (%s);", (hexhash,))
+        return self.db.csfr(f"SELECT hashid FROM {self.prefix}hashes WHERE hash=%s LIMIT 1", (hexhash,))[0]
 
+    def get_scanid(self, now):
+        """Get or create a scanid for a given time"""
+        self.db.csfr("INSERT IGNORE INTO scans (time) VALUES (%s);", (now,))
+        return self.db.csfr("SELECT scanid FROM scans WHERE time=%s LIMIT 1", (now,))[0]
+
+    # Get the pathid for a given posix path
+    def get_pathid(self,  path):
+        (dirname, filename) = os.path.split(path)
+
+        # dirname
+        self.db.csfr("INSERT IGNORE INTO dirnames (dirname) VALUES (%s);", (dirname,))
+        dirnameid = self.db.csfr("SELECT dirnameid FROM dirnames WHERE dirname=%s LIMIT 1", (dirname,))[0]
+
+        # filename
+        self.db.csfr("INSERT IGNORE INTO filenames (filename) VALUES (%s);", (filename,))
+        filenameid = self.db.csfr("SELECT filenameid FROM filenames WHERE filename=%s", (filename,))[0]
+
+        # pathid
+        self.db.csfr("INSERT IGNORE INTO paths (dirnameid,filenameid) VALUES (%s,%s);",
+                     (dirnameid, filenameid,))
+        pathid = self.db.csfr("SELECT pathid FROM paths WHERE dirnameid=%s AND filenameid=%s LIMIT 1",
+                                     (dirnameid, filenameid,))[0]
+        return pathid
+
+
+    def get_hashid(self, pathid, mtime, size):
+        """Search the database and return any hashids for files that have a given pathid, mtime and size"""
+        for row in self.db.csfr("SELECT hashid FROM files WHERE pathid=%s AND mtime=%s AND size=%s LIMIT 1",
+                                     (pathid, mtime, file_size)):
+            return row[0]
+        return None
+
+    def add_pmshs(self,pathid, mtime, file_size, hashid, scanid):
+        self.db.csfr("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (%s,%s,%s,%s,%s)",
+                       (pathid, mtime, file_size, hashid, self.scanid))
+        if self.args.vfiles:
+            print("{} {}".format(path, file_size))
+
+    def ingest_done(self, scanid,duration):
+        self.db.csfr("UPDATE scans SET duration=%s WHERE scanid=%s",
+                     (scanid, duration))
+
+    # Perform scans
+    def scan_roots(self):
+        for root in fcm.get_roots():
+            if root.startswith("s3://"):
+                s = scanner.S3Scanner(fcm)
+            else:
+                s = scanner.FileScanner(fcm)
+            s.ingest(root)
+            print("Total files added to database: {}".format(s.filecount))
+            print("Total directories scanned:     {}".format(s.dircount))
+            print("Total time: {}".format(int(s.t1 - s.t0)))
+            
+    def get_scans(self):
+        return self.csfra("SELECT scanid, time, rootid, rootdir FROM {prefix}scans NATURAL JOIN {prefix}roots"
+                          .format(prefix=self.prefix))
     def last_scan(self):
         return self.csfra("SELECT MAX(scanid) FROM {prefix}scans".format(prefix=self.prefix))[0][0]
 
+    # Set math on the files
     def all_files(self, scan0):
         results = self.db.csfr(self.auth,
-                                 "SELECT fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime "
-                                 "FROM {prefix}files NATURAL JOIN {prefix}paths NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames "
-                                 "WHERE scanid={scanid}".format(scanid=scan0, prefix=self.prefix))
+                               """SELECT fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime 
+                               FROM {prefix}files 
+                                          NATURAL JOIN {prefix}paths 
+                                          NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames 
+                               WHERE scanid={scanid}
+                               """.format(scanid=scan0, prefix=self.prefix))
         for fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime in results:
             yield {"fileid": fileid, "pathid": pathid, "rootid": rootid, "size": size,
                    "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid,
@@ -192,18 +253,17 @@ class ScanDatabase(ABC):
 
     def new_files(self, scan0, scan1):
         """Files in scan scan1 that are not in scan scan0"""
-        ret = []
         results = self.db.csfr(self.auth,
-                                 "SELECT fileid, pathid, size,  dirnameid, dirname, filenameid, filename, mtime "
-                                 "FROM {prefix}files NATURAL JOIN {prefix}paths NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames "
-                                 "WHERE scanid={scan0} AND pathid NOT IN (SELECT pathid FROM {prefix}files WHERE scanid={scan1})"
-                               .format(scan0=scan1, scan1=scan0, prefix=self.prefix))
-        # Maybe this should be cleaned up? It might look messy, but the logic makes sense.
+                               """SELECT fileid, pathid, size,  dirnameid, dirname, filenameid, filename, mtime 
+                               FROM {prefix}files 
+                                          NATURAL JOIN {prefix}paths 
+                                          NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames 
+                               WHERE scanid={scan0} AND pathid NOT IN (SELECT pathid FROM {prefix}files WHERE scanid={scan1})
+                               """.format(scan0=scan1, scan1=scan0, prefix=self.prefix))
         for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in results:
-            ret.append({"fileid": fileid, "pathid": pathid, "size": size,
-                        "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid, "filename": filename,
-                        "mtime": mtime})
-        return ret
+            yield {"fileid": fileid, "pathid": pathid, "size": size,
+                   "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid, "filename": filename,
+                   "mtime": mtime}
 
     def deleted_files(self, scan0, scan1):
         return self.new_files(scan1, scan0)
@@ -211,11 +271,12 @@ class ScanDatabase(ABC):
     def changed_files(self, scan0, scan1):
         """Files that were changed between scan0 and scan1"""
         ret = []
-        results = self.db.csfr(self.auth, "SELECT a.pathid as pathid, a.hashid, b.hashid FROM "
-                                            "(SELECT pathid, hashid, scanid FROM {prefix}files WHERE scanid={scan0}) as a "
-                                            "JOIN (SELECT pathid, hashid, scanid FROM {prefix}files WHERE scanid={scan1}) as b "
-                                            "ON a.pathid=b.pathid WHERE a.hashid != b.hashid"
-                               .format(scan0=scan0, scan1=scan1, prefix=self.prefix))
+        results = self.db.csfr(self.auth,
+                               """SELECT a.pathid as pathid, a.hashid, b.hashid FROM 
+                               (SELECT pathid, hashid, scanid FROM {prefix}files WHERE scanid={scan0}) as a 
+                               JOIN (SELECT pathid, hashid, scanid FROM {prefix}files WHERE scanid={scan1}) as b 
+                               ON a.pathid=b.pathid WHERE a.hashid != b.hashid
+                               """.format(scan0=scan0, scan1=scan1, prefix=self.prefix))
         for pathid, ahashid, bhashid in results:
             dirnameid, filenameid = self.db.csfr(self.auth,
                                                  "SELECT dirnameid, filenameid FROM {prefix}paths WHERE pathid={pathid}"
@@ -227,12 +288,12 @@ class ScanDatabase(ABC):
                                     "SELECT filename FROM {prefix}filenames WHERE filenameid={filenameid}"
                                     .format(filenameid=filenameid, prefix=self.prefix))[0][0]
             yield {"dirname": dirname, "filename": filename}
-        #     ret.append({"pathid":pathid, "ahashid":ahashid, "bhashid":bhashid})
-        # return ret
 
     def duplicate_files(self, scan0):
         """Return a generator for the duplicate files at scan0.
-        Returns a list of a list of File objects, sorted by size"""
+        Returns a list of a list of File objects, sorted by size.
+        This should probabe be done with a subselect.
+        """
         cresult = self.db.csfr(self.auth,
                                """SELECT hashid, ct, size FROM 
                                (SELECT hashid, count(hashid) AS ct, size FROM {prefix}files 
@@ -242,30 +303,32 @@ class ScanDatabase(ABC):
         for hashid, ct, size in cresult:
             ret = []
             dresult = self.db.csfr(self.auth,
-                                   'SELECT fileid,pathid,size,dirnameid,dirname,filenameid,filename,mtime '
-                                   'FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames '
-                                   'WHERE scanid={scanid} AND hashid={hashid}'
-                                   .format( scanid=scan0, hashid=hashid))
+                                   """SELECT fileid,pathid,size,dirnameid,dirname,filenameid,filename,mtime 
+                                   FROM files NATURAL JOIN paths NATURAL JOIN dirnames NATURAL JOIN filenames 
+                                   WHERE scanid={scanid} AND hashid={hashid}
+                                   """.format( scanid=scan0, hashid=hashid))
             for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in dresult:
                 ret.append({"fileid": fileid, "pathid": pathid, "size": size,
                             "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid,
                             "filename": filename, "mtime": mtime})
             yield ret
 
-    # TODO: renamed files only tracks last scanned file. Will consider
-    # any file containing the same information as renamed if they have
-    # different names.
 
     def renamed_files(self, scan0, scan1):
         """Return a generator for the duplicate files at scan0.
         The generator returns pairs of (F_old,F_new)
+
+        TODO: renamed files only tracks last scanned file. Will consider
+        any file containing the same information as renamed if they have
+        different names.
         """
 
         def get_singletons(scanid):
-            results = self.db.csfr(self.auth, 'SELECT hashID, pathid, count(*) AS ct '
-                                                'FROM {prefix}files WHERE scanid={scanid} GROUP BY hashid, pathid HAVING ct=1'
-                                   .format(scanid=scanid, prefix=self.prefix))
-            return results
+            return self.db.csfr(self.auth,
+                                """
+                                SELECT hashID, pathid, count(*) AS ct 
+                                FROM {prefix}files WHERE scanid={scanid} GROUP BY hashid, pathid HAVING ct=1
+                                """.format(scanid=scanid, prefix=self.prefix))
 
         pairs_in_scan0 = set()
         path1_for_hash = {}
@@ -276,7 +339,7 @@ class ScanDatabase(ABC):
         for (hashID, path2, count) in get_singletons(scan1):
             if hashID in path1_for_hash and (hashID, path2) not in pairs_in_scan0:
                 dirnameid1, filenameid1 = self.db.csfr(self.auth,
-                                                         "SELECT dirnameid, filenameid FROM {prefix}paths WHERE pathid={pathid}"
+                                                       "SELECT dirnameid, filenameid FROM {prefix}paths WHERE pathid={pathid}"
                                                        .format( pathid=path1_for_hash[hashID],
                                                              prefix=self.prefix))[0]
                 dirname1 = self.db.csfr(self.auth,
@@ -461,6 +524,7 @@ class ScanDatabase(ABC):
             dump_dictionary(fp, "fileids", fileids)
 
 class SQLite3ScanDatabase(ScanDatabase):
+    """ScanDatabase for SQLite3"""
     def __init__(self, *, fname, prefix=""):
         super().__init__(db = dbfile.DBSqlite3(fname=fname), prefix=prefix)
 
@@ -469,6 +533,7 @@ class SQLite3ScanDatabase(ScanDatabase):
 
 
 class MySQLScanDatabase(ScanDatabase):
+    """ScanDatabase for MySQL. Can learn connection info from a config.ini file."""
     def __init__(self, *, auth, prefix=""):
         super().__init__(db = dbfile.DBMySQL(auth), auth=auth, prefix=prefix)
     

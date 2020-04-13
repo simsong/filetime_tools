@@ -57,15 +57,14 @@ if __name__ == "__main__":
 
     # Mutually exclusive database choice
     if args.config:
-        fcm = get_MySQL_fcm(args.config)
+        fcm = scandb.MySQLScanDatabase.FromConfigFile(args.config)
     elif args.sqlite3db:
-        fcm = SQLite3FileChangeManager(fname=args.sqlite3db)
+        fcm = scandb.SQLite3ScanDatabase(fname=args.sqlite3db)
 
     # Mutually exclusive commands
 
     if args.create:
         fcm.create_database()
-
     if args.addroot:
         fcm.add_root(args.addroot)
         print("Added root: ", args.addroot)
@@ -73,9 +72,8 @@ if __name__ == "__main__":
         fcm.del_root(args.delroot)
         print("Deleted root: ", args.delroot)
     if args.scans:
-        fcm.list_scans()
-    if args.roots:
-        print("\n".join(fcm.get_roots()))
+        for (scanid, rootdir, time) in fcm.get_scans():
+            print(scanid, rootdir, time)
     if args.report:
         m = re.search(r"(\d+)-(\d+)", args.report)
         if not m:
@@ -87,10 +85,5 @@ if __name__ == "__main__":
     if args.dups:
         fcm.report_dups(fcm.last_scan())
     if args.scan:
-        for root in fcm.get_roots():
-            print("Scanning: {}".format(root))
-            if root.startswith("s3://"):
-                scanner.S3Scanner(fcm, args, auth).ingest(root)
-            else:
-                scanner.FileScanner(fcm, args, auth).ingest(root)
+        fcm.scan_roots()
             
