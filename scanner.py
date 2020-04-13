@@ -86,8 +86,7 @@ class Scanner(ABC):
 
     def insert_file(self, *, root, path, mtime, file_size, handle=None, hexdigest=None):
         """@mtime in time_t"""
-        pathid = self.get_pathid(path)
-
+        pathid = self.sdm.get_pathid(path)
         try:
             hashid = self.get_file_hashid(pathid=pathid,mtime=mtime,file_size=file_size,f=handle, hexdigest=hexdigest)
         except PermissionError as e:
@@ -114,10 +113,6 @@ class Scanner(ABC):
             self.insert_file(root=root, path=path+"/"+zi.filename, mtime=mtime,
                              file_size=zi.file_size, handle=zf.open(zi.filename,"r"))
 
-    def ingest_start(self):
-        print("ingest_start")
-        self.scanid = self.get_scanid(timet_iso())
-
     @abstractmethod
     def ingest_walk(self, root):
         pass
@@ -125,7 +120,7 @@ class Scanner(ABC):
     def ingest(self, root):
         """Ingest everything from the root"""
         self.t0 = time.time()
-        self.ingest_start(root)
+        self.scanid = self.sdm.get_scanid(self.t0)
         self.ingest_walk(root)
         self.t1 = time.time()
         self.sdm.ingest_done(self.scanid,self.t1 - self.t0)

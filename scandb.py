@@ -8,6 +8,8 @@ This database mechanim is used to store data about file systems. It also contain
 This class builds upon the ctools.dbfile class. It should have no code that is in dbfile.
 """
 __version__ = '0.0.1'
+import datetime
+import time
 import os.path
 import sqlite3
 from abc import ABC, abstractmethod
@@ -154,15 +156,13 @@ class ScanDatabase(ABC):
 
     def add_root(self, root):
         "Add a root, ignore if it is already there. "
-        self.db.csfr(self.auth,
-                     f"INSERT IGNORE INTO {self.prefix}roots (rootdir) VALUES ( %s )",
+        self.csfra(f"INSERT IGNORE INTO {self.prefix}roots (rootdir) VALUES ( %s )",
                      [root])
         self.db.commit()
 
     def get_roots(self):
         """Return a list of the roots in the database."""
-        rows = self.db.csfr(self.auth,
-                            "SELECT rootdir FROM {prefix}roots".format(prefix=self.prefix),[])
+        rows = self.csfra("SELECT rootdir FROM {prefix}roots".format(prefix=self.prefix),[])
         return [row[0] for row in rows]
 
     def del_root(self, root):
@@ -174,58 +174,60 @@ class ScanDatabase(ABC):
     # Database manipulation routines for scanner class
     def get_hashid(self, hexhash):
         """Given a hex hash code, return the hashid (an integer)"""
-        self.db.csfr(f"INSERT IGNORE INTO {self.prefix}hashes (hash) VALUES (%s);", (hexhash,))
-        return self.db.csfr(f"SELECT hashid FROM {self.prefix}hashes WHERE hash=%s LIMIT 1", (hexhash,))[0]
+        self.csfra(f"INSERT IGNORE INTO {self.prefix}hashes (hash) VALUES (%s);", (hexhash,))
+        return self.csfra(f"SELECT hashid FROM {self.prefix}hashes WHERE hash=%s LIMIT 1", (hexhash,))[0]
 
     def get_scanid(self, now):
         """Get or create a scanid for a given time"""
-        self.db.csfr("INSERT IGNORE INTO scans (time) VALUES (%s);", (now,))
-        return self.db.csfr("SELECT scanid FROM scans WHERE time=%s LIMIT 1", (now,))[0]
+        # NOW is a timet; need to change it to ISO-8061
+        iso8601 = datetime.datetime.utcfromtimestamp(int(now)).isoformat()
+        self.csfra("INSERT IGNORE INTO scans (time) VALUES (%s);", (iso8601,))
+        return self.csfra("SELECT scanid FROM scans WHERE time=%s LIMIT 1", (iso8601,))[0]
 
     # Get the pathid for a given posix path
-    def get_pathid(self,  path):
+    def get_pathid(self, path):
         (dirname, filename) = os.path.split(path)
 
         # dirname
-        self.db.csfr("INSERT IGNORE INTO dirnames (dirname) VALUES (%s);", (dirname,))
-        dirnameid = self.db.csfr("SELECT dirnameid FROM dirnames WHERE dirname=%s LIMIT 1", (dirname,))[0]
+        self.csfra("INSERT IGNORE INTO dirnames (dirname) VALUES (%s);", (dirname,))
+        dirnameid = self.csfra("SELECT dirnameid FROM dirnames WHERE dirname=%s LIMIT 1", (dirname,))[0]
 
         # filename
-        self.db.csfr("INSERT IGNORE INTO filenames (filename) VALUES (%s);", (filename,))
-        filenameid = self.db.csfr("SELECT filenameid FROM filenames WHERE filename=%s", (filename,))[0]
+        self.csfra("INSERT IGNORE INTO filenames (filename) VALUES (%s);", (filename,))
+        filenameid = self.csfra("SELECT filenameid FROM filenames WHERE filename=%s", (filename,))[0]
 
         # pathid
-        self.db.csfr("INSERT IGNORE INTO paths (dirnameid,filenameid) VALUES (%s,%s);",
+        self.csfra("INSERT IGNORE INTO paths (dirnameid,filenameid) VALUES (%s,%s);",
                      (dirnameid, filenameid,))
-        pathid = self.db.csfr("SELECT pathid FROM paths WHERE dirnameid=%s AND filenameid=%s LIMIT 1",
+        pathid = self.csfra("SELECT pathid FROM paths WHERE dirnameid=%s AND filenameid=%s LIMIT 1",
                                      (dirnameid, filenameid,))[0]
         return pathid
 
 
     def get_hashid(self, pathid, mtime, size):
         """Search the database and return any hashids for files that have a given pathid, mtime and size"""
-        for row in self.db.csfr("SELECT hashid FROM files WHERE pathid=%s AND mtime=%s AND size=%s LIMIT 1",
+        for row in self.csfra("SELECT hashid FROM files WHERE pathid=%s AND mtime=%s AND size=%s LIMIT 1",
                                      (pathid, mtime, file_size)):
             return row[0]
         return None
 
     def add_pmshs(self,pathid, mtime, file_size, hashid, scanid):
-        self.db.csfr("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (%s,%s,%s,%s,%s)",
+        self.csfra("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (%s,%s,%s,%s,%s)",
                        (pathid, mtime, file_size, hashid, self.scanid))
         if self.args.vfiles:
             print("{} {}".format(path, file_size))
 
     def ingest_done(self, scanid,duration):
-        self.db.csfr("UPDATE scans SET duration=%s WHERE scanid=%s",
+        self.csfra("UPDATE scans SET duration=%s WHERE scanid=%s",
                      (scanid, duration))
 
     # Perform scans
     def scan_roots(self):
-        for root in fcm.get_roots():
+        for root in self.get_roots():
             if root.startswith("s3://"):
-                s = scanner.S3Scanner(fcm)
+                s = scanner.S3Scanner(self)
             else:
-                s = scanner.FileScanner(fcm)
+                s = scanner.FileScanner(self)
             s.ingest(root)
             print("Total files added to database: {}".format(s.filecount))
             print("Total directories scanned:     {}".format(s.dircount))

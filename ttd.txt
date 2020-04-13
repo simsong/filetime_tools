@@ -1,3 +1,10 @@
+Simson TTD:
+- add tests for dirnameid and filenameid
+
+
+================================================================
+
+
 Problems with previous code:
 - Didn't use the default database, instead the databse name was specified on every INSERT/SELECT. 
 
