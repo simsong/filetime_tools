@@ -81,3 +81,13 @@ to this:
 	    yield {"fileid": fileid, "pathid": pathid, "rootid": rootid, "size": size,
                    "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid,
                    "filename": filename, "mtime": mtime}
+
+
+OMG. Why did you use a DELETE IGNORE?
+    def del_root(self, root):
+        self.db.csfr(self.auth,
+                     f"DELETE IGNORE FROM {self.prefix}roots WHERE rootdir=%s",
+                     [root])
+        self.db.commit()
+
+That breaks referrential integrity. You can't do that. If you want to delete a root that's in a constraint, you're doing something wrong. In this case, the roots should probably have an additional column that's 'in use' or something. Basically, you didn't properly design how to handle the dete optional. If you are using IGNORE on DELETE, you're doing something wrong.

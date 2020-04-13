@@ -134,6 +134,8 @@ class ScanDatabase(ABC):
     It would be great if we could do that specialization solely through dbfile, but there are some differences.
     Whenever possible, the implementaiton should go here, rather than have duplicate implementaitons in the subclasses.
     So all methods are not abstract methods, only those that require database-specific implementations.
+
+    Each of these methods is tested in tests/scandb_tests.py for every implementation
     """
     def __init__(self, *, db, prefix="", auth=None):
         self.prefix  = prefix
@@ -150,19 +152,6 @@ class ScanDatabase(ABC):
 
     # Manipulate roots
 
-    def del_root(self, root):
-        self.db.csfr(self.auth,
-                     f"DELETE IGNORE FROM {self.prefix}roots WHERE rootdir=%s",
-                     [root])
-        
-
-    def get_roots(self):
-        """Return a list of the roots in the database."""
-        rows = self.db.csfr(self.auth,
-                            "SELECT rootdir FROM {prefix}roots".format(prefix=self.prefix),[])
-        print("rows=",list(rows))
-        return [row[0] for row in rows]
-
     def add_root(self, root):
         "Add a root, ignore if it is already there. "
         self.db.csfr(self.auth,
@@ -170,6 +159,18 @@ class ScanDatabase(ABC):
                      [root])
         self.db.commit()
 
+    def get_roots(self):
+        """Return a list of the roots in the database."""
+        rows = self.db.csfr(self.auth,
+                            "SELECT rootdir FROM {prefix}roots".format(prefix=self.prefix),[])
+        return [row[0] for row in rows]
+
+    def del_root(self, root):
+        self.db.csfr(self.auth,
+                     f"DELETE FROM {self.prefix}roots WHERE rootdir=%s",
+                     [root])
+        self.db.commit()        
+        
     # Manipulate scans
     def list_scans(self):
         for (scanid, time) in self.csfra("SELECT scanid, time, rootid, rootdir FROM {prefix}scans NATURAL JOIN {prefix}roots"
@@ -483,9 +484,6 @@ class MySQLScanDatabase(ScanDatabase):
         fcm.config = config
         return fcm
     
-
-
-
     def create_database(self):
         self.db.create_schema(MYSQL_SCHEMA.format(prefix=self.prefix))
 
