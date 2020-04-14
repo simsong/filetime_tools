@@ -156,6 +156,10 @@ files        - list of all files
 hashes       - table of all hash code
 """
 
+class Ignore():
+    def __getattr__(self,name):
+        return lambda *args,**kwargs:None
+
 class ScanDatabase(ABC):
     """Abstract class that represents database scans. A database scan is an inventory of the files under one or more roots.
     This class is then specialized for the MySQL and SQLite3 classes. 
@@ -325,15 +329,18 @@ class ScanDatabase(ABC):
             filename = self.csfra(f"SELECT filename FROM {self.filenames} WHERE filenameid={filenameid}")[0][0]
             yield {"dirname": dirname, "filename": filename}
 
-    def duplicate_files(self, scan0):
-        """Return a generator for the duplicate files at scan0.
+    def duplicate_files(self, scanid=None, min_dupsize=0):
+        """Return a generator for the duplicate files at scanid.
         Returns a list of a list of File objects, sorted by size.
         This should probabe be done with a subselect.
         """
+        if scanid is None:
+            scanid = self.last_scan()
+
         cresult = self.csfra(f"""SELECT hashid, ct, size FROM 
                                (SELECT hashid, count(hashid) AS ct, size FROM {self.files} 
-                               WHERE scanid={scan0} GROUP BY hashid, size) as T 
-                               WHERE ct>1 AND size>{args.dupsize} ORDER BY 3 DESC;""")
+                               WHERE scanid=%s GROUP BY hashid, size) as T 
+                               WHERE ct>1 AND size>%s ORDER BY 3 DESC;""", (scanid,min_dupsize))
         for hashid, ct, size in cresult:
             ret = []
             dresult = self.csfra(f"""SELECT fileid,pathid,size,dirnameid,dirname,filenameid,filename,mtime 
@@ -341,7 +348,7 @@ class ScanDatabase(ABC):
                                          NATURAL JOIN {self.paths} 
                                          NATURAL JOIN {self.dirnames} 
                                          NATURAL JOIN {self.filenames} 
-                                   WHERE scanid={scan0} AND hashid={hashid}""")
+                                   WHERE scanid=%s AND hashid=%s""",(scanid,hashid))
             for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in dresult:
                 ret.append({"fileid": fileid, "pathid": pathid, "size": size,
                             "dirnameid": dirnameid, "dirname": dirname, "filenameid": filenameid,
@@ -379,11 +386,13 @@ class ScanDatabase(ABC):
                 yield {"dirname1": dirname1, "filename1": filename1, "dirname2": dirname2, "filename2": filename2}
                 # yield ({"hashid":hashID, "pathid":path1_for_hash[hashID]}, {"hashid": hashID, "pathid": path2})
 
-    def report(self, a, b):
-        """Generate a report from time a to time b"""
-        docs = None
-        if args.out:
-            docs = tydoc()
+    def report(self, a, b, doc=None):
+        """Generate a report from time a to time b. 
+        @param doc is a tydoc object if provided
+        """
+        if doc is None:
+            doc = Ignore()
+
         atime = self.db.execselect(
             "SELECT time FROM {prefix}scans WHERE scanid={scanid}"
             .format(scanid=a, prefix=self.prefix))
@@ -402,54 +411,54 @@ class ScanDatabase(ABC):
             btime = btime[0]
         print("Report from {}->{}".format(str(atime), str(btime)))
 
-        if args.out: docs.set_title("Report from {}->{}".format(str(atime), str(btime)))
+        doc.set_title("Report from {}->{}".format(str(atime), str(btime)))
 
         print()
         print("New files:")
         if args.out: docs.h1("New files:")
         for f in self.get_new_files(a, b):
-            if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
+            doc.p(os.path.join(f['dirname'], f['filename']))
             print(os.path.join(f["dirname"], f["filename"]))
 
         print()
         print("Changed files:")
-        if args.out: docs.h1("Changed files:")
+        doc.h1("Changed files:")
         for f in self.changed_files(a, b):
             if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
             print(os.path.join(f['dirname'], f['filename']))
 
         print()
         print("Deleted files:")
-        if args.out: docs.h1("Deleted files:")
+        doc.h1("Deleted files:")
         for f in self.deleted_files(a, b):
             if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
             print(os.path.join(f["dirname"], f["filename"]))
 
         print()
         print("Renamed files:")
-        if args.out: docs.h1("Renamed files:")
+        doc.h1("Renamed files:")
         for f in self.renamed_files(a, b):
             if args.out: docs.p(os.path.join(f['dirname'], f['filename']))
             print(os.path.join(f["dirname1"], f["filename1"]) + " -> " + os.path.join(f["dirname2"], f["filename2"]))
 
         print()
         print("Duplicate files:")
-        if args.out: docs.h1("Duplicate files:")
-        for dups in self.get_duplicate_files(b):
-            if args.out: docs.p("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
+        doc.h1("Duplicate files:")
+        for dups in self.duplicate_files(b):
+            doc.p("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
             print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
             for dup in dups:
-                if args.out: docs.p("    {}".format(os.path.join(dup["dirname"], dup["filename"])))
+                doc.p("    {}".format(os.path.join(dup["dirname"], dup["filename"])))
                 print("    {}".format(os.path.join(dup["dirname"], dup["filename"])))
         print("\n-----------")
-        if args.out: docs.save(args.out.split('/')[-1] + ".html")
+        doc.save(args.out.split('/')[-1] + ".html")
 
     def report_dups(self, scan0):
         import codecs
         with codecs.open(args.out, mode="w", encoding='utf8mb4') as out:
             out.write("Duplicate files:\n")
             total_wasted = 0
-            for dups in self.get_duplicate_files(conn, scan0):
+            for dups in self.duplicate_files(scan0):
                 out.write("Filesize: {:,}  Count: {}\n".format(dups[0].size, len(dups)))
                 for dup in dups:
                     print(dup)
@@ -458,13 +467,14 @@ class ScanDatabase(ABC):
             out.write("-----------\n")
             out.write("Total wasted space: {}MB".format(total_wasted / 1000000))
 
-    def report_dups(self, b):
-        duplicate_bytes = 0
+    def report_dups(self, scanid=None):
+        if scanid is None:
+            scanid = self.last_scan()
 
         result = self.csfra(f"SELECT scanid, rootdir FROM {self.scans} NATURAL JOIN {self.roots} WHERE scanid=%s",(b,))[0]
         rootdir = result[2]
 
-        for dups in self.get_duplicate_files(b):
+        for dups in self.duplicate_files(b):
             if dups[0]["size"] > args.dupsize:
                 print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
                 for d in dups:
@@ -508,7 +518,7 @@ class ScanDatabase(ABC):
 
         print("duplicate files")
         duplicate_files = []
-        for dups in self.get_duplicate_files(last):
+        for dups in self.duplicate_files(last):
             duplicate_files.append([f['fileid'] for f in dups])
             for f in dups:
                 backfill(f)

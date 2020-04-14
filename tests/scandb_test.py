@@ -74,6 +74,12 @@ def check_scan_enabled_roots(sdb):
     for pl in DATA:
         assert pl in present
 
+def check_find_dups_after_scan(sdb):
+    dups = list(sdb.duplicate_files())
+    # There is one set of dups. They have the same filenames but different directories
+    assert len(dups)==1
+    assert dups[0][0]['filename']==dups[0][1]['filename']=='23456.txt'
+    assert dups[0][0]['dirname'] != dups[0][1]['dirname']
 
 def check_database(sdb):
     check_get_enabled_roots(sdb)
@@ -81,6 +87,7 @@ def check_database(sdb):
     check_pathid(sdb)
     check_hashid(sdb)
     check_scan_enabled_roots(sdb)
+    check_find_dups_after_scan(sdb)
 
 def test_sqlite3_schema():
     with tempfile.NamedTemporaryFile(suffix='.dbfile') as tf:
