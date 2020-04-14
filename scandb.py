@@ -195,9 +195,9 @@ class ScanDatabase(ABC):
         self.db.commit()
 
     def get_enabled_roots( self ):
-        """Return a list of the roots in the database."""
+        """Return a set of the roots in the database (we use a set so the order doesn't matter)."""
         rows = self.csfra(f"SELECT rootdir FROM {self.roots} WHERE enabled > 0",[])
-        return [row[0] for row in rows]
+        return set([row[0] for row in rows])
 
     def del_root(self, root):
         """We never delete roots, but we make them not enabled"""
@@ -249,25 +249,29 @@ class ScanDatabase(ABC):
             return row[0]
         return None
 
-    def add_pmshs(self, pathid, mtime, file_size, hashid, scanid):
+    def add_pmsh(self, pathid, mtime, file_size, hashid):
         self.csfra(f"INSERT INTO {self.files} (pathid,mtime,size,hashid,scanid) VALUES (%s,%s,%s,%s,%s)",
-                       (pathid, mtime, file_size, hashid, scanid))
+                       (pathid, mtime, file_size, hashid, self.scanid))
 
-    def ingest_done(self, scanid, duration):
-        self.csfra(f"UPDATE {self.scans} SET duration=%s WHERE scanid=%s",
-                     (scanid, duration))
+    def ingest_done(self, duration):
+        self.csfra(f"UPDATE {self.scans} SET duration=%s WHERE scanid=%s", (self.scanid, duration))
 
     # Perform scans
     def scan_enabled_roots(self):
+        self.t0 = time.time()
+        self.scanid = self.get_scanid( self.t0 )
         for root in self.get_enabled_roots():
             if root.startswith("s3://"):
                 s = scanner.S3Scanner(self)
             else:
                 s = scanner.FileScanner(self)
-            s.ingest( root )
-            print("Total files added to database: {}".format(s.filecount))
-            print("Total directories scanned:     {}".format(s.dircount))
-            print("Total time: {}".format(int(s.t1 - s.t0)))
+            s.ingest_walk( root )
+            self.db.commit()
+        self.t1 = time.time()
+        self.ingest_done(self.t1 - self.t0)
+        print("Total files added to database: {}".format(s.filecount))
+        print("Total directories scanned:     {}".format(s.dircount))
+        print("Total time: {}".format(int(self.t1 - self.t0)))
             
     def get_scans(self):
         return self.csfra(f"SELECT scanid, time, rootid, rootdir FROM {self.scans} NATURAL JOIN {self.roots}")
@@ -540,17 +544,17 @@ class SQLite3ScanDatabase(ScanDatabase):
 
 class MySQLScanDatabase(ScanDatabase):
     """ScanDatabase for MySQL. Can learn connection info from a config.ini file."""
-    def __init__(self, *, auth, prefix=""):
-        super().__init__(db = dbfile.DBMySQL(auth), auth=auth, prefix=prefix)
+    def __init__(self, *, auth, prefix="", debug=None):
+        super().__init__(db = dbfile.DBMySQL(auth, debug=debug), auth=auth, prefix=prefix)
     
     @classmethod
-    def FromConfigFile(self, config_file, prefix=""):
+    def FromConfigFile(self, config_file, prefix="", debug=None):
         config = configparser.ConfigParser()
         config.read(config_file)
-        auth   = dbfile.DBMySQLAuth.FromConfig(config[MYSQL_SERVER_SECTION])
+        auth   = dbfile.DBMySQLAuth.FromConfig(config[MYSQL_SERVER_SECTION], debug=debug)
         if prefix=="":
             prefix = config[FCHANGE_SECTION][TABLE_PREFIX]
-        fcm    = MySQLScanDatabase(auth=auth, prefix=prefix)
+        fcm    = MySQLScanDatabase(auth=auth, prefix=prefix, debug=debug)
         fcm.config = config
         return fcm
     

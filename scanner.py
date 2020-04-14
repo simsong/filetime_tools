@@ -92,7 +92,7 @@ class Scanner(ABC):
         except OSError as e:
             return
 
-        self.sdm.add_pmshs(pathid, mtime, file_size, hashid, self.scanid)
+        self.sdm.add_pmsh(pathid, mtime, file_size, hashid)
 
     def process_filepath(self, path):
         """ Add the file to the database database.
@@ -115,14 +115,6 @@ class Scanner(ABC):
     def ingest_walk(self, start_path):
         pass
         
-    def ingest(self, start_path):
-        """Ingest everything from the root"""
-        self.t0 = time.time()
-        self.scanid = self.sdm.get_scanid( self.t0 )
-        self.ingest_walk( start_path )
-        self.t1 = time.time()
-        self.sdm.ingest_done(self.scanid, self.t1 - self.t0)
-
 class FileScanner(Scanner):
     """Scanner for native file system.that Extends the Scanner class and implements MySQL db storage"""
     def __init__(self, *args, **kwargs):

@@ -11,6 +11,12 @@ TEST_MYSQL=True
 DEFAULT_CONFIG_FILENAME = os.path.join( os.path.dirname(__file__), '../default.ini')
 DIR1 = os.path.join( os.path.dirname(__file__), "data/DIR1")
 DIR2 = os.path.join( os.path.dirname(__file__), "data/DIR2")
+FOOBAR = "foobar/"
+DATA = [
+    ('tests/data/DIR1', '12345.txt', 6),
+    ('tests/data/DIR1', '23456.txt', 6),
+    ('tests/data/DIR2', '23456.txt', 6),
+    ('tests/data/DIR2', '34567.txt', 6)]
 
 
 def make_database(sdb):
@@ -19,14 +25,13 @@ def make_database(sdb):
     sdb.add_root( DIR2 )
 
 def check_get_enabled_roots(sdb):
-    assert sdb.get_enabled_roots() == sorted([DIR1, DIR2])
+    assert sdb.get_enabled_roots() == set([DIR1, DIR2])
 
 def check_del_root(sdb):
-    FOOBAR = "foobar/"
     sdb.add_root( FOOBAR )
-    assert sdb.get_enabled_roots() == sorted([FOOBAR, DIR1, DIR2])
+    assert sdb.get_enabled_roots() == set([FOOBAR, DIR1, DIR2])
     sdb.del_root( FOOBAR )
-    assert sdb.get_enabled_roots() == sorted([DIR1, DIR2])
+    assert sdb.get_enabled_roots() == set([DIR1, DIR2])
 
 def check_pathid(sdb):
     h1 = sdb.get_pathid("a/b/c")
@@ -49,6 +54,10 @@ def check_hashid(sdb):
     assert h1==h3
 
 def check_scan_enabled_roots(sdb):
+    sdb.add_root( DIR1 )
+    sdb.add_root( DIR2 )
+    sdb.del_root( FOOBAR )
+    assert set(sdb.get_enabled_roots()) == set([DIR1, DIR2])
     sdb.scan_enabled_roots()
     last_scan = sdb.last_scan()
     objs = list(sdb.all_files(last_scan))
@@ -59,10 +68,7 @@ def check_scan_enabled_roots(sdb):
         raise RuntimeError("got wrong number of objects back")
     # Make sure these four objects are present
     present = [("/".join(obj['dirname'].split("/")[-3:]),obj['filename'],obj['size']) for obj in objs]
-    for pl in [('tests/data/DIR1', '12345.txt', 6),
-                    ('tests/data/DIR1', '23456.txt', 6),
-                    ('tests/data/DIR2', '23456.txt', 6),
-                    ('tests/data/DIR2', '34567.txt', 6)]:
+    for pl in DATA:
         assert pl in present
 
 
@@ -78,7 +84,7 @@ def test_sqlite3_schema():
         name = tf.name
         name = "db.db"
         os.unlink(name)
-        sdb = scandb.SQLite3ScanDatabase(fname=name)
+        sdb = scandb.SQLite3ScanDatabase(fname=name, debug=True)
         sdb.create_database()
 
 
@@ -88,32 +94,32 @@ def test_create_database_sqlite3():
         name = tf.name
         name = "db.db"
         os.unlink(name)
-        sdb = scandb.SQLite3ScanDatabase(fname=name)
+        sdb = scandb.SQLite3ScanDatabase(fname=name, debug=True)
         make_database(sdb)
         del sdb
 
-        sdb = scandb.SQLite3ScanDatabase(fname=name)
+        sdb = scandb.SQLite3ScanDatabase(fname=name, debug=True)
         check_database(sdb)
         del sdb
 
 def test_create_database_mysql():
     """Test to make sure that the create database feature works"""
-    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME)
+    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME,debug=True)
     make_database(sdb)
     del sdb
 
-    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME)
+    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME,debug=True)
     check_database(sdb)
     del sdb
 
 
 def test_create_database_mysql_prefix():
     """Test to make sure that the features work with a prefix set"""
-    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME, prefix="xxx")
+    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME, prefix="xxx", debug=True)
     make_database(sdb)
     del sdb
 
-    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME, prefix="xxx")
+    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME, prefix="xxx", debug=True)
     check_database(sdb)
     del sdb
 
