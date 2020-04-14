@@ -63,7 +63,7 @@ class Scanner(ABC):
         # If not, we will hash the file and enter it.
         # This means that we are trusting that the mtime gets updated if the file contents change.
         # We might also want to look at the file generation count.
-        hashid = self.sdm.get_file_hashid(pathid,mtime,size)
+        hashid = self.sdm.get_hashid_for_pms(pathid, mtime, file_size)
         if hashid is not None:
             return hashid
 
@@ -81,7 +81,7 @@ class Scanner(ABC):
                 m.update(buf)
             hexdigest = m.hexdigest()
         # Put the hash into the database and return it
-        return self.sdm.get_hashid( hexdigest )
+        return self.sdm.get_hashid_for_hexdigest( hexdigest )
         
 
     def insert_file(self, *, root, path, mtime, file_size, handle=None, hexdigest=None):

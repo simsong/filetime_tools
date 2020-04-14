@@ -172,17 +172,17 @@ class ScanDatabase(ABC):
         self.db.commit()        
         
     # Database manipulation routines for scanner class
-    def get_hashid(self, hexhash):
+    def get_hashid_for_hexdigest(self, hexdigest):
         """Given a hex hash code, return the hashid (an integer)"""
-        self.csfra(f"INSERT IGNORE INTO {self.prefix}hashes (hash) VALUES (%s);", (hexhash,))
-        return self.csfra(f"SELECT hashid FROM {self.prefix}hashes WHERE hash=%s LIMIT 1", (hexhash,))[0]
+        self.csfra(f"INSERT IGNORE INTO {self.prefix}hashes (hash) VALUES (%s);", (hexdigest,))
+        return self.csfra(f"SELECT hashid FROM {self.prefix}hashes WHERE hash=%s LIMIT 1", (hexdigest,))[0][0]
 
     def get_scanid(self, now):
         """Get or create a scanid for a given time"""
         # NOW is a timet; need to change it to ISO-8061
         iso8601 = datetime.datetime.utcfromtimestamp(int(now)).isoformat()
         self.csfra("INSERT IGNORE INTO scans (time) VALUES (%s);", (iso8601,))
-        return self.csfra("SELECT scanid FROM scans WHERE time=%s LIMIT 1", (iso8601,))[0]
+        return self.csfra("SELECT scanid FROM scans WHERE time=%s LIMIT 1", (iso8601,))[0][0]
 
     # Get the pathid for a given posix path
     def get_pathid(self, path):
@@ -190,21 +190,23 @@ class ScanDatabase(ABC):
 
         # dirname
         self.csfra("INSERT IGNORE INTO dirnames (dirname) VALUES (%s);", (dirname,))
-        dirnameid = self.csfra("SELECT dirnameid FROM dirnames WHERE dirname=%s LIMIT 1", (dirname,))[0]
+        dirnameid = self.csfra("SELECT dirnameid FROM dirnames WHERE dirname=%s LIMIT 1", (dirname,))[0][0]
 
+        print("dirnameid:",dirnameid)
+        assert isinstance(dirnameid, int)
         # filename
         self.csfra("INSERT IGNORE INTO filenames (filename) VALUES (%s);", (filename,))
-        filenameid = self.csfra("SELECT filenameid FROM filenames WHERE filename=%s", (filename,))[0]
+        filenameid = self.csfra("SELECT filenameid FROM filenames WHERE filename=%s", (filename,))[0][0]
 
         # pathid
         self.csfra("INSERT IGNORE INTO paths (dirnameid,filenameid) VALUES (%s,%s);",
                      (dirnameid, filenameid,))
         pathid = self.csfra("SELECT pathid FROM paths WHERE dirnameid=%s AND filenameid=%s LIMIT 1",
-                                     (dirnameid, filenameid,))[0]
+                                     (dirnameid, filenameid,))[0][0]
         return pathid
 
 
-    def get_hashid(self, pathid, mtime, size):
+    def get_hashid_for_pms(self, pathid, mtime, file_size):
         """Search the database and return any hashids for files that have a given pathid, mtime and size"""
         for row in self.csfra("SELECT hashid FROM files WHERE pathid=%s AND mtime=%s AND size=%s LIMIT 1",
                                      (pathid, mtime, file_size)):
@@ -213,9 +215,7 @@ class ScanDatabase(ABC):
 
     def add_pmshs(self,pathid, mtime, file_size, hashid, scanid):
         self.csfra("INSERT INTO files (pathid,mtime,size,hashid,scanid) VALUES (%s,%s,%s,%s,%s)",
-                       (pathid, mtime, file_size, hashid, self.scanid))
-        if self.args.vfiles:
-            print("{} {}".format(path, file_size))
+                       (pathid, mtime, file_size, hashid, scanid))
 
     def ingest_done(self, scanid,duration):
         self.csfra("UPDATE scans SET duration=%s WHERE scanid=%s",

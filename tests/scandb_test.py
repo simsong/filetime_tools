@@ -27,15 +27,38 @@ def check_del_root(sdb):
     sdb.del_root( FOOBAR )
     assert sdb.get_roots() == sorted([DIR1, DIR2])
 
+def check_pathid(sdb):
+    h1 = sdb.get_pathid("a/b/c")
+    h2 = sdb.get_pathid("a/b/d")
+    h3 = sdb.get_pathid("a/b/c")
+    assert isinstance(h1,int)
+    assert isinstance(h2,int)
+    assert isinstance(h3,int)
+    assert h1!=h2
+    assert h1==h3
+
+def check_hashid(sdb):
+    h1 = sdb.get_hashid_for_hexdigest("0123456789")
+    h2 = sdb.get_hashid_for_hexdigest("0123456789000")
+    h3 = sdb.get_hashid_for_hexdigest("0123456789")
+    assert isinstance(h1,int)
+    assert isinstance(h2,int)
+    assert isinstance(h3,int)
+    assert h1!=h2
+    assert h1==h3
+
 def check_scan_roots(sdb):
     sdb.scan_roots()
-    for obj in sdb.get_files(root=DIR1):
+    last_scan = sdb.last_scan()
+    for obj in sdb.all_files(last_scan):
         print(obj)
     raise RuntimeError("FIX ME")
 
 def check_database(sdb):
     check_get_roots(sdb)
     check_del_root(sdb)
+    check_pathid(sdb)
+    check_hashid(sdb)
     check_scan_roots(sdb)
 
 
