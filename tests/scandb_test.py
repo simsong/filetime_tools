@@ -1,6 +1,7 @@
 import tempfile
 import sqlite3
 import os
+import sys
 
 import scandb
 
@@ -17,15 +18,15 @@ def make_database(sdb):
     sdb.add_root( DIR1 )
     sdb.add_root( DIR2 )
 
-def check_get_roots(sdb):
-    assert sdb.get_roots() == sorted([DIR1, DIR2])
+def check_get_enabled_roots(sdb):
+    assert sdb.get_enabled_roots() == sorted([DIR1, DIR2])
 
 def check_del_root(sdb):
     FOOBAR = "foobar/"
     sdb.add_root( FOOBAR )
-    assert sdb.get_roots() == sorted([FOOBAR, DIR1, DIR2])
+    assert sdb.get_enabled_roots() == sorted([FOOBAR, DIR1, DIR2])
     sdb.del_root( FOOBAR )
-    assert sdb.get_roots() == sorted([DIR1, DIR2])
+    assert sdb.get_enabled_roots() == sorted([DIR1, DIR2])
 
 def check_pathid(sdb):
     h1 = sdb.get_pathid("a/b/c")
@@ -47,24 +48,38 @@ def check_hashid(sdb):
     assert h1!=h2
     assert h1==h3
 
-def check_scan_roots(sdb):
-    sdb.scan_roots()
+def check_scan_enabled_roots(sdb):
+    sdb.scan_enabled_roots()
     last_scan = sdb.last_scan()
     objs = list(sdb.all_files(last_scan))
     # Both objects should be in the same directory, but they are different
-    assert len(objs) == 2
-    assert objs[0]['dirnameid'] == objs[1]['dirnameid']
-    assert objs[0]['pathid']    != objs[1]['pathid']
-    assert objs[0]['size']      == objs[1]['size'] == 6
-    assert list(sorted([objs[0]['filename'],objs[1]['filename']])) == ['23456.txt','34567.txt']
+    if len(objs)!=4:
+        for obj in objs:
+            print(obj,file=sys.stderr)
+        raise RuntimeError("got wrong number of objects back")
+    # Make sure these four objects are present
+    present = [("/".join(obj['dirname'].split("/")[-3:]),obj['filename'],obj['size']) for obj in objs]
+    for pl in [('tests/data/DIR1', '12345.txt', 6),
+                    ('tests/data/DIR1', '23456.txt', 6),
+                    ('tests/data/DIR2', '23456.txt', 6),
+                    ('tests/data/DIR2', '34567.txt', 6)]:
+        assert pl in present
 
 
 def check_database(sdb):
-    check_get_roots(sdb)
+    check_get_enabled_roots(sdb)
     check_del_root(sdb)
     check_pathid(sdb)
     check_hashid(sdb)
-    check_scan_roots(sdb)
+    check_scan_enabled_roots(sdb)
+
+def test_sqlite3_schema():
+    with tempfile.NamedTemporaryFile(suffix='.dbfile') as tf:
+        name = tf.name
+        name = "db.db"
+        os.unlink(name)
+        sdb = scandb.SQLite3ScanDatabase(fname=name)
+        sdb.create_database()
 
 
 def test_create_database_sqlite3():
@@ -72,6 +87,7 @@ def test_create_database_sqlite3():
     with tempfile.NamedTemporaryFile(suffix='.dbfile') as tf:
         name = tf.name
         name = "db.db"
+        os.unlink(name)
         sdb = scandb.SQLite3ScanDatabase(fname=name)
         make_database(sdb)
         del sdb
@@ -87,6 +103,17 @@ def test_create_database_mysql():
     del sdb
 
     sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME)
+    check_database(sdb)
+    del sdb
+
+
+def test_create_database_mysql_prefix():
+    """Test to make sure that the features work with a prefix set"""
+    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME, prefix="xxx")
+    make_database(sdb)
+    del sdb
+
+    sdb = scandb.MySQLScanDatabase.FromConfigFile(DEFAULT_CONFIG_FILENAME, prefix="xxx")
     check_database(sdb)
     del sdb
 

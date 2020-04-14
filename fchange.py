@@ -85,5 +85,5 @@ if __name__ == "__main__":
     if args.dups:
         fcm.report_dups(fcm.last_scan())
     if args.scan:
-        fcm.scan_roots()
+        fcm.scan_enabled_roots()
             

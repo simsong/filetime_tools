@@ -16,8 +16,6 @@ from ctools.s3 import *
 DIR_COMMIT_RATE  =  10  # commit every 10 directories
 FILE_COMMIT_RATE = 100  # commit every 100 files
 
-
-
 def hash_file(f):
     """High performance file hasher. Hash a file and return the MD5 hexdigest."""
     from hashlib import md5
@@ -84,7 +82,7 @@ class Scanner(ABC):
         return self.sdm.get_hashid_for_hexdigest( hexdigest )
         
 
-    def insert_file(self, *, root, path, mtime, file_size, handle=None, hexdigest=None):
+    def insert_file(self, *, path, mtime, file_size, handle=None, hexdigest=None):
         """@mtime in time_t"""
         pathid = self.sdm.get_pathid(path)
         try:
@@ -96,7 +94,7 @@ class Scanner(ABC):
 
         self.sdm.add_pmshs(pathid, mtime, file_size, hashid, self.scanid)
 
-    def process_filepath(self, root, path):
+    def process_filepath(self, path):
         """ Add the file to the database database.
         If it is there and the mtime hasn't been changed, don't re-hash."""
 
@@ -104,40 +102,40 @@ class Scanner(ABC):
             st = os.stat(path)
         except FileNotFoundError as e:
             return
-        self.insert_file(path=path, root=root, mtime=st.st_mtime, file_size=st.st_size, handle=open(path,"rb"))
+        self.insert_file(path=path, mtime=st.st_mtime, file_size=st.st_size, handle=open(path,"rb"))
 
-    def process_zipfile(self, root, path, zf):
+    def process_zipfile(self, path, zf):
         """Scan a zip file and insert it into the database"""
         for zi in zf.infolist():
             mtime = time.mktime(zi.date_time + (0,0,0))
-            self.insert_file(root=root, path=path+"/"+zi.filename, mtime=mtime,
+            self.insert_file(path=path+"/"+zi.filename, mtime=mtime,
                              file_size=zi.file_size, handle=zf.open(zi.filename,"r"))
 
     @abstractmethod
-    def ingest_walk(self, root):
+    def ingest_walk(self, start_path):
         pass
         
-    def ingest(self, root):
+    def ingest(self, start_path):
         """Ingest everything from the root"""
         self.t0 = time.time()
-        self.scanid = self.sdm.get_scanid(self.t0)
-        self.ingest_walk(root)
+        self.scanid = self.sdm.get_scanid( self.t0 )
+        self.ingest_walk( start_path )
         self.t1 = time.time()
-        self.sdm.ingest_done(self.scanid,self.t1 - self.t0)
+        self.sdm.ingest_done(self.scanid, self.t1 - self.t0)
 
 class FileScanner(Scanner):
     """Scanner for native file system.that Extends the Scanner class and implements MySQL db storage"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args,**kwargs)
 
-    def ingest_walk(self, root):
+    def ingest_walk(self, start_path):
         """Walk the local file system and go inside ZIP files"""
-        for (dirpath, dirnames, filenames) in os.walk(root):
+        for (dirpath, dirnames, filenames) in os.walk(start_path):
             for filename in filenames:
                 #
                 # Get full path and process
                 filename_path = os.path.join(dirpath, filename)
-                self.process_filepath(root, filename_path)
+                self.process_filepath(filename_path)
 
                 # See if this is a zipfile. If so, process it
                 zf = open_zipfile(filename_path)

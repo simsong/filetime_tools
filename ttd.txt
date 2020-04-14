@@ -97,3 +97,6 @@ FILE_COMMIT_RATE  = 100 # Commit every 100 files
 	    if self.filecount % FILE_COMMIT_RATE == 0:
                 self.conn.commit()
 
+
+
+Roots were implemented as a linkage to the scans table and the paths table. But roots are properties of paths. So the rootid column was removed from scans and files and added to paths. This required a lot of other changes. 
