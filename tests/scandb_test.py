@@ -50,9 +50,14 @@ def check_hashid(sdb):
 def check_scan_roots(sdb):
     sdb.scan_roots()
     last_scan = sdb.last_scan()
-    for obj in sdb.all_files(last_scan):
-        print(obj)
-    raise RuntimeError("FIX ME")
+    objs = list(sdb.all_files(last_scan))
+    # Both objects should be in the same directory, but they are different
+    assert len(objs) == 2
+    assert objs[0]['dirnameid'] == objs[1]['dirnameid']
+    assert objs[0]['pathid']    != objs[1]['pathid']
+    assert objs[0]['size']      == objs[1]['size'] == 6
+    assert list(sorted([objs[0]['filename'],objs[1]['filename']])) == ['23456.txt','34567.txt']
+
 
 def check_database(sdb):
     check_get_roots(sdb)
@@ -65,11 +70,13 @@ def check_database(sdb):
 def test_create_database_sqlite3():
     """Test to make sure that the create database feature works"""
     with tempfile.NamedTemporaryFile(suffix='.dbfile') as tf:
-        sdb = scandb.SQLite3ScanDatabase(fname=tf.name)
+        name = tf.name
+        name = "db.db"
+        sdb = scandb.SQLite3ScanDatabase(fname=name)
         make_database(sdb)
         del sdb
 
-        sdb = scandb.SQLite3ScanDatabase(fname=tf.name)
+        sdb = scandb.SQLite3ScanDatabase(fname=name)
         check_database(sdb)
         del sdb
 

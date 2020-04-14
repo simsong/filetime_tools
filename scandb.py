@@ -27,34 +27,26 @@ TABLE_PREFIX="table_prefix"
 # We don't use an object relation mapper (ORM) because the performance was just not there.
 # However, we should migrate as much here as possible to the ctools/dbfile class
 
+raise RuntimeError("question - why is the rootid part of the scan? does that even make sense?")
+
 SQLITE3_CACHE_SIZE = 2000000
 SQLLITE3_SET_CACHE = "PRAGMA cache_size = {};".format(SQLITE3_CACHE_SIZE)
 
 SQLITE3_SCHEMA = \
     """
+CREATE TABLE IF NOT EXISTS metadata (key VARCHAR(255) PRIMARY KEY,value VARCHAR(255) NOT NULL);
+
 CREATE TABLE IF NOT EXISTS roots (rootid INTEGER PRIMARY KEY, rootdir VARCHAR(255) NOT NULL UNIQUE);
 CREATE INDEX IF NOT EXISTS roots_idx0 ON roots(rootdir);
 
-CREATE TABLE IF NOT EXISTS metadata (key VARCHAR(255) PRIMARY KEY,value VARCHAR(255) NOT NULL);
-
-CREATE TABLE IF NOT EXISTS files (fileid INTEGER PRIMARY KEY,
-                                  pathid INTEGER NOT NULL,
-                                  mtime INTEGER NOT NULL, 
-                                  size INTEGER NOT NULL, 
-                                  hashid INTEGER NOT NULL, 
-                                  scanid INTEGER NOT NULL);
-CREATE INDEX IF NOT EXISTS files_idx0 ON files(fileid);
-CREATE INDEX IF NOT EXISTS files_idx1 ON files(pathid);
-CREATE INDEX IF NOT EXISTS files_idx2 ON files(mtime);
-CREATE INDEX IF NOT EXISTS files_idx3 ON files(size);
-CREATE INDEX IF NOT EXISTS files_idx4 ON files(hashid);
-CREATE INDEX IF NOT EXISTS files_idx5 ON files(scanid);
-CREATE INDEX IF NOT EXISTS files_idx6 ON files(scanid,hashid);
-
-CREATE TABLE IF NOT EXISTS paths (pathid INTEGER PRIMARY KEY,dirnameid INTEGER NOT NULL, filenameid INTEGER NOT NULL);
-CREATE INDEX IF NOT EXISTS paths_idx1 ON paths(pathid);
-CREATE INDEX IF NOT EXISTS paths_idx2 ON paths(dirnameid);
-CREATE INDEX IF NOT EXISTS paths_idx3 ON paths(filenameid);
+CREATE TABLE IF NOT EXISTS scans (scanid INTEGER PRIMARY KEY,
+                                  rootid INTEGER NOT NULL,
+                                  time DATETIME NOT NULL UNIQUE,
+                                  duration INTEGER,
+                                  CONSTRAINT fk1 FOREIGN KEY (rootid) REFERENCES roots(rootid));
+CREATE INDEX IF NOT EXISTS scans_idx1 ON scans(scanid);
+CREATE INDEX IF NOT EXISTS scans_idx2 ON scans(rootid);
+CREATE INDEX IF NOT EXISTS scans_idx3 ON scans(time);
 
 CREATE TABLE IF NOT EXISTS dirnames (dirnameid INTEGER PRIMARY KEY,dirname TEXT NOT NULL UNIQUE);
 CREATE INDEX IF NOT EXISTS dirnames_idx1 ON dirnames(dirnameid);
@@ -64,13 +56,32 @@ CREATE TABLE IF NOT EXISTS filenames (filenameid INTEGER PRIMARY KEY,filename TE
 CREATE INDEX IF NOT EXISTS filenames_idx1 ON filenames(filenameid);
 CREATE INDEX IF NOT EXISTS filenames_idx2 ON filenames(filename);
 
+CREATE TABLE IF NOT EXISTS paths (pathid INTEGER PRIMARY KEY,dirnameid INTEGER NOT NULL, filenameid INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS paths_idx1 ON paths(pathid);
+CREATE INDEX IF NOT EXISTS paths_idx2 ON paths(dirnameid);
+CREATE INDEX IF NOT EXISTS paths_idx3 ON paths(filenameid);
+
 CREATE TABLE IF NOT EXISTS hashes (hashid INTEGER PRIMARY KEY,hash TEXT NOT NULL UNIQUE);
 CREATE INDEX IF NOT EXISTS hashes_idx1 ON hashes(hashid);
 CREATE INDEX IF NOT EXISTS hashes_idx2 ON hashes(hash);
 
-CREATE TABLE IF NOT EXISTS scans (scanid INTEGER PRIMARY KEY,time DATETIME NOT NULL UNIQUE,duration INTEGER);
-CREATE INDEX IF NOT EXISTS scans_idx1 ON scans(scanid);
-CREATE INDEX IF NOT EXISTS scans_idx2 ON scans(time);
+CREATE TABLE IF NOT EXISTS files (fileid INTEGER PRIMARY KEY,
+                                  pathid INTEGER NOT NULL,
+                                  mtime INTEGER NOT NULL, 
+                                  size INTEGER NOT NULL, 
+                                  hashid INTEGER NOT NULL, 
+                                  scanid INTEGER NOT NULL,
+                                  CONSTRAINT fk1 FOREIGN KEY (pathid) REFERENCES paths(pathid),
+                                  CONSTRAINT fk2 FOREIGN KEY (hashid) REFERENCES hashes(hashid),
+                                  CONSTRAINT fk1 FOREIGN KEY (scanid) REFERENCES scans(scanid));
+CREATE INDEX IF NOT EXISTS files_idx0 ON files(fileid);
+CREATE INDEX IF NOT EXISTS files_idx1 ON files(pathid);
+CREATE INDEX IF NOT EXISTS files_idx2 ON files(mtime);
+CREATE INDEX IF NOT EXISTS files_idx3 ON files(size);
+CREATE INDEX IF NOT EXISTS files_idx4 ON files(hashid);
+CREATE INDEX IF NOT EXISTS files_idx5 ON files(scanid);
+CREATE INDEX IF NOT EXISTS files_idx6 ON files(scanid,hashid);
+
 """
 
 MYSQL_SCHEMA = """
@@ -79,6 +90,15 @@ CREATE TABLE  {prefix}metadata (name VARCHAR(255) PRIMARY KEY, value VARCHAR(255
 
 DROP TABLE IF EXISTS {prefix}roots;
 CREATE TABLE {prefix}roots (rootid INTEGER PRIMARY KEY AUTO_INCREMENT, rootdir VARCHAR(255) UNIQUE NOT NULL) character set utf8;
+
+DROP TABLE IF EXISTS {prefix}scans;
+CREATE TABLE  {prefix}scans (scanid INTEGER PRIMARY KEY AUTO_INCREMENT,
+                                      rootid INTEGER REFERENCES {prefix}roots(rootid),
+                                      time DATETIME NOT NULL,
+                                      duration INTEGER) character set utf8;
+CREATE INDEX  scans_idx1 ON {prefix}scans(scanid);
+CREATE INDEX  scans_idx2 ON {prefix}scans(time);
+CREATE UNIQUE INDEX scans_idx3 ON {prefix}scans(rootid,time);
 
 DROP TABLE IF EXISTS {prefix}dirnames;
 CREATE TABLE  {prefix}dirnames (dirnameid INTEGER PRIMARY KEY AUTO_INCREMENT,dirname TEXT(65536)) character set utf8;
@@ -98,15 +118,6 @@ CREATE INDEX  paths_idx3 ON {prefix}paths(filenameid);
 DROP TABLE IF EXISTS {prefix}hashes;
 CREATE TABLE  {prefix}hashes (hashid INTEGER PRIMARY KEY AUTO_INCREMENT,hash TEXT(65536) NOT NULL) character set utf8;
 CREATE INDEX  hashes_idx2 ON {prefix}hashes( hash(700));
-
-DROP TABLE IF EXISTS {prefix}scans;
-CREATE TABLE  {prefix}scans (scanid INTEGER PRIMARY KEY AUTO_INCREMENT,
-                                      rootid INTEGER REFERENCES {prefix}roots(rootid),
-                                      time DATETIME NOT NULL,
-                                      duration INTEGER) character set utf8;
-CREATE INDEX  scans_idx1 ON {prefix}scans(scanid);
-CREATE INDEX  scans_idx2 ON {prefix}scans(time);
-CREATE UNIQUE INDEX scans_idx3 ON {prefix}scans(rootid,time);
 
 DROP TABLE IF EXISTS {prefix}files;
 CREATE TABLE  {prefix}files (fileid INTEGER PRIMARY KEY AUTO_INCREMENT,
@@ -175,6 +186,7 @@ class ScanDatabase(ABC):
     def get_hashid_for_hexdigest(self, hexdigest):
         """Given a hex hash code, return the hashid (an integer)"""
         self.csfra(f"INSERT IGNORE INTO {self.prefix}hashes (hash) VALUES (%s);", (hexdigest,))
+        self.db.commit()
         return self.csfra(f"SELECT hashid FROM {self.prefix}hashes WHERE hash=%s LIMIT 1", (hexdigest,))[0][0]
 
     def get_scanid(self, now):
@@ -182,6 +194,7 @@ class ScanDatabase(ABC):
         # NOW is a timet; need to change it to ISO-8061
         iso8601 = datetime.datetime.utcfromtimestamp(int(now)).isoformat()
         self.csfra("INSERT IGNORE INTO scans (time) VALUES (%s);", (iso8601,))
+        self.db.commit()
         return self.csfra("SELECT scanid FROM scans WHERE time=%s LIMIT 1", (iso8601,))[0][0]
 
     # Get the pathid for a given posix path
@@ -190,17 +203,20 @@ class ScanDatabase(ABC):
 
         # dirname
         self.csfra("INSERT IGNORE INTO dirnames (dirname) VALUES (%s);", (dirname,))
+        self.db.commit()
         dirnameid = self.csfra("SELECT dirnameid FROM dirnames WHERE dirname=%s LIMIT 1", (dirname,))[0][0]
 
         print("dirnameid:",dirnameid)
         assert isinstance(dirnameid, int)
         # filename
         self.csfra("INSERT IGNORE INTO filenames (filename) VALUES (%s);", (filename,))
+        self.db.commit()
         filenameid = self.csfra("SELECT filenameid FROM filenames WHERE filename=%s", (filename,))[0][0]
 
         # pathid
         self.csfra("INSERT IGNORE INTO paths (dirnameid,filenameid) VALUES (%s,%s);",
                      (dirnameid, filenameid,))
+        self.db.commit()
         pathid = self.csfra("SELECT pathid FROM paths WHERE dirnameid=%s AND filenameid=%s LIMIT 1",
                                      (dirnameid, filenameid,))[0][0]
         return pathid
@@ -241,11 +257,13 @@ class ScanDatabase(ABC):
 
     # Set math on the files
     def all_files(self, scan0):
+        # Generating crash on SQLite3 but not MySQL
         results = self.db.csfr(self.auth,
                                """SELECT fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime 
                                FROM {prefix}files 
                                           NATURAL JOIN {prefix}paths 
-                                          NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames 
+                                          NATURAL JOIN {prefix}dirnames 
+                                          NATURAL JOIN {prefix}filenames 
                                WHERE scanid={scanid}
                                """.format(scanid=scan0, prefix=self.prefix))
         for fileid, pathid, rootid, size, dirnameid, dirname, filenameid, filename, mtime in results:
@@ -259,7 +277,8 @@ class ScanDatabase(ABC):
                                """SELECT fileid, pathid, size,  dirnameid, dirname, filenameid, filename, mtime 
                                FROM {prefix}files 
                                           NATURAL JOIN {prefix}paths 
-                                          NATURAL JOIN {prefix}dirnames NATURAL JOIN {prefix}filenames 
+                                          NATURAL JOIN {prefix}dirnames 
+                                          NATURAL JOIN {prefix}filenames 
                                WHERE scanid={scan0} AND pathid NOT IN (SELECT pathid FROM {prefix}files WHERE scanid={scan1})
                                """.format(scan0=scan1, scan1=scan0, prefix=self.prefix))
         for fileid, pathid, size, dirnameid, dirname, filenameid, filename, mtime in results:
