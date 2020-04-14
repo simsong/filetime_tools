@@ -8,6 +8,9 @@ import scandb
 TEST_SQLITE=True
 TEST_MYSQL=True
 
+USE_LOCAL_DB=True
+LOCAL_DB_NAME='db.db'
+
 DEFAULT_CONFIG_FILENAME = os.path.join( os.path.dirname(__file__), '../default.ini')
 DIR1 = os.path.join( os.path.dirname(__file__), "data/DIR1")
 DIR2 = os.path.join( os.path.dirname(__file__), "data/DIR2")
@@ -81,9 +84,12 @@ def check_database(sdb):
 
 def test_sqlite3_schema():
     with tempfile.NamedTemporaryFile(suffix='.dbfile') as tf:
-        name = tf.name
-        name = "db.db"
-        os.unlink(name)
+        if USE_LOCAL_DB:
+            name = LOCAL_DB_NAME
+        else:
+            name = tf.name 
+        if os.path.exists(name):
+            os.unlink(name)
         sdb = scandb.SQLite3ScanDatabase(fname=name, debug=True)
         sdb.create_database()
 
@@ -91,9 +97,12 @@ def test_sqlite3_schema():
 def test_create_database_sqlite3():
     """Test to make sure that the create database feature works"""
     with tempfile.NamedTemporaryFile(suffix='.dbfile') as tf:
-        name = tf.name
-        name = "db.db"
-        os.unlink(name)
+        if USE_LOCAL_DB:
+            name = LOCAL_DB_NAME
+        else:
+            name = tf.name 
+        if os.path.exists(name):
+            os.unlink(name)
         sdb = scandb.SQLite3ScanDatabase(fname=name, debug=True)
         make_database(sdb)
         del sdb

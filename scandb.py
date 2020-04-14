@@ -535,8 +535,8 @@ class ScanDatabase(ABC):
 
 class SQLite3ScanDatabase(ScanDatabase):
     """ScanDatabase for SQLite3"""
-    def __init__(self, *, fname, prefix=""):
-        super().__init__(db = dbfile.DBSqlite3(fname=fname, debug=1), prefix=prefix)
+    def __init__(self, *, fname, prefix="", debug=None):
+        super().__init__(db = dbfile.DBSqlite3(fname=fname, debug=debug), prefix=prefix)
 
     def create_database(self):
         self.db.create_schema(SQLITE3_SCHEMA)
