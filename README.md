@@ -24,13 +24,14 @@ _fix_timestamps.py_ - Seek out and rename MDY timestamps in filenames to be YYYY
 
     python3 fix_timestamps.py [--dry-run] [--gui] root1 [root2 ...]
 
-## Find duplicate files in DIR1 and DIR2:
-Currently, you need to put both dir1 and dir2 into a single directory:
+## Find duplicate files in DIR2 that are also in DIR1
 
-    mkdir dir3
-    mv DIR1 DIR2 dir3
-    python3 fchange.py --db mydb.db --create dir3
-    python3 fchange.py --db mydb.db --dups
+
+    python3 fchange.py --db mydb.db --create 
+    python3 fchange.py --db mydb.db --addroot DIR1
+    python3 fchange.py --db mydb.db --addroot DIR2
+    python3 fchange.py --db mydb.db --scan
+    python3 fchange.py --db mydb.db --reportdups
 
 ## Scan DIR1 and print the SH1 codes of every file with SQLite3
    python3 fchange.py --sqlite3db mydb.db --addroot DIR1

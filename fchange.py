@@ -39,7 +39,7 @@ if __name__ == "__main__":
     g.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     g.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
     g.add_argument("--dump",   help='Dump the last scan in a standard form', action='store_true')
-    g.add_argument("--dups", help="Report duplicates for most recent scan", action='store_true')
+    g.add_argument("--reportdups", help="Report duplicates for most recent scan", action='store_true')
     g.add_argument("--addroot", help="Add a new root", type=str)
     g.add_argument("--delroot", help="Delete an existing root", type=str)
     g.add_argument("--scan", help="Initiate a scan", action='store_true')
@@ -49,6 +49,7 @@ if __name__ == "__main__":
     parser.add_argument("--vfiles", help="Report each file as ingested", action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested", action="store_true")
     parser.add_argument("--limit", help="Only search this many", type=int)
+    parser.add_argument("--debug", help="Enable debugging", action='store_true')
     
     args = parser.parse_args()
 
@@ -57,9 +58,9 @@ if __name__ == "__main__":
 
     # Mutually exclusive database choice
     if args.config:
-        fcm = scandb.MySQLScanDatabase.FromConfigFile(args.config)
+        fcm = scandb.MySQLScanDatabase.FromConfigFile(args.config, debug=args.debug)
     elif args.sqlite3db:
-        fcm = scandb.SQLite3ScanDatabase(fname=args.sqlite3db)
+        fcm = scandb.SQLite3ScanDatabase(fname=args.sqlite3db, debug=args.debug)
 
     # Mutually exclusive commands
 
@@ -82,7 +83,7 @@ if __name__ == "__main__":
         fcm.report(int(m.group(1)), int(m.group(2)))
     if args.jreport:
         fcm.jreport()
-    if args.dups:
+    if args.reportdups:
         fcm.report_dups(fcm.last_scan())
     if args.scan:
         fcm.scan_enabled_roots()

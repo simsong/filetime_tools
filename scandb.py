@@ -338,9 +338,9 @@ class ScanDatabase(ABC):
             scanid = self.last_scan()
 
         cresult = self.csfra(f"""SELECT hashid, ct, size FROM 
-                               (SELECT hashid, count(hashid) AS ct, size FROM {self.files} 
-                               WHERE scanid=%s GROUP BY hashid, size) as T 
-                               WHERE ct>1 AND size>%s ORDER BY 3 DESC;""", (scanid,min_dupsize))
+                                        (SELECT hashid, count(hashid) AS ct, size FROM {self.files} 
+                                         WHERE scanid=%s GROUP BY hashid, size) as T 
+                                 WHERE ct>1 AND size>%s ORDER BY 3 DESC""", (scanid,min_dupsize))
         for hashid, ct, size in cresult:
             ret = []
             dresult = self.csfra(f"""SELECT fileid,pathid,size,dirnameid,dirname,filenameid,filename,mtime 
@@ -453,36 +453,16 @@ class ScanDatabase(ABC):
         print("\n-----------")
         doc.save(args.out.split('/')[-1] + ".html")
 
-    def report_dups(self, scan0):
-        import codecs
-        with codecs.open(args.out, mode="w", encoding='utf8mb4') as out:
-            out.write("Duplicate files:\n")
-            total_wasted = 0
-            for dups in self.duplicate_files(scan0):
-                out.write("Filesize: {:,}  Count: {}\n".format(dups[0].size, len(dups)))
-                for dup in dups:
-                    print(dup)
-                    out.write("   , " + os.path.join(dup.dirname, dup.filename) + "\n")
-                total_wasted += dups[0].size * (len(dups) - 1)
-            out.write("-----------\n")
-            out.write("Total wasted space: {}MB".format(total_wasted / 1000000))
-
-    def report_dups(self, scanid=None):
-        if scanid is None:
-            scanid = self.last_scan()
-
-        result = self.csfra(f"SELECT scanid, rootdir FROM {self.scans} NATURAL JOIN {self.roots} WHERE scanid=%s",(b,))[0]
-        rootdir = result[2]
-
-        for dups in self.duplicate_files(b):
-            if dups[0]["size"] > args.dupsize:
-                print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
-                for d in dups:
-                    print("    {}".format(os.path.join(d["dirname"], d["filename"])))
-                print()
-                duplicate_bytes += dups[0]["size"] * (len(dups) - 1)
+    def report_dups(self, scanid=None, min_dupsize=0):
+        duplicated_bytes = 0
+        for dups in self.duplicate_files(scanid, min_dupsize=min_dupsize):
+            print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
+            for d in dups:
+                print("    {}".format(os.path.join(d["dirname"], d["filename"])))
+            print()
+            duplicated_bytes += dups[0]["size"] * (len(dups) - 1)
         print("\n-----------")
-        print("Total space duplicated by files larger than {:,}: {:,}".format(args.dupsize, duplicate_bytes))
+        print("Total space duplicated by files larger than {:,}: {:,}".format(min_dupsize, duplicated_bytes))
 
     def jreport(self):
         from collections import defaultdict
