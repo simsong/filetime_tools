@@ -278,7 +278,7 @@ class ScanDatabase(ABC):
         print("Total time: {}".format(int(self.t1 - self.t0)))
             
     def get_scans(self):
-        return self.csfra(f"SELECT scanid, time, rootid, rootdir FROM {self.scans} NATURAL JOIN {self.roots}")
+        return self.csfra(f"SELECT scanid, time, duration FROM {self.scans} NATURAL JOIN {self.roots}")
 
     def last_scan(self):
         return self.csfra(f"SELECT MAX(scanid) FROM {self.scans}")[0][0]
@@ -452,17 +452,6 @@ class ScanDatabase(ABC):
                 print("    {}".format(os.path.join(dup["dirname"], dup["filename"])))
         print("\n-----------")
         doc.save(args.out.split('/')[-1] + ".html")
-
-    def report_dups(self, scanid=None, min_dupsize=0):
-        duplicated_bytes = 0
-        for dups in self.duplicate_files(scanid, min_dupsize=min_dupsize):
-            print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
-            for d in dups:
-                print("    {}".format(os.path.join(d["dirname"], d["filename"])))
-            print()
-            duplicated_bytes += dups[0]["size"] * (len(dups) - 1)
-        print("\n-----------")
-        print("Total space duplicated by files larger than {:,}: {:,}".format(min_dupsize, duplicated_bytes))
 
     def jreport(self):
         from collections import defaultdict

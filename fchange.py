@@ -16,12 +16,27 @@ import scanner
 import scandb
 import ctools.dbfile as dbfile
 import ctools.tydoc as tydoc
+import json
 
 
 ############################################################
 ############################################################
 
 # Tools for extracting from the database
+
+def report_dups(fcm, scanid=None, min_dupsize=0, fname_json=None):
+    duplicated_bytes = 0
+    the_dups = list(fcm.duplicate_files(fcm.last_scan(), min_dupsize=min_dupsize))
+    for dups in the_dups:
+        print("Filesize: {:,}  Count: {}".format(dups[0]["size"], len(dups)))
+        for d in dups:
+            print("    {}".format(os.path.join(d["dirname"], d["filename"])))
+        print()
+        duplicated_bytes += dups[0]["size"] * (len(dups) - 1)
+    print("\n-----------")
+    print("Total space duplicated by files larger than {:,}: {:,}".format(min_dupsize, duplicated_bytes))
+    if fname_json:
+        json.dump( the_dups, open(fname_json,"w"))
 
 if __name__ == "__main__":
     import argparse
@@ -34,7 +49,7 @@ if __name__ == "__main__":
 
     g = parser.add_mutually_exclusive_group(required=True)
     g.add_argument("--create", help="Create a database", action='store_true')
-    g.add_argument("--scans", help="List the scans in the DB", action='store_true')
+    g.add_argument("--listscans", help="List the scans in the DB", action='store_true')
     g.add_argument("--listroots", help="List all roots in the DB", action='store_true')  # initial root?
     g.add_argument("--report", help="Report what's changed between scans A and B (e.g. A-B)")
     g.add_argument("--jreport", help="Create 'what's changed?' json report", action='store_true')
@@ -44,7 +59,9 @@ if __name__ == "__main__":
     g.add_argument("--delroot", help="Delete an existing root", type=str)
     g.add_argument("--scan", help="Initiate a scan", action='store_true')
 
-    parser.add_argument("--dupsize", help="Don't report dups smaller than dupsize", default=1024 * 1024, type=int)
+    parser.add_argument("--fname_json", help="If specified, output report in JSON to the provided name")
+    parser.add_argument("--min_dupsize", help="Don't report dups smaller than dupsize",
+                        default=1024 * 1024, type=int)
     parser.add_argument("--out", help="Specifies output filename")
     parser.add_argument("--vfiles", help="Report each file as ingested", action="store_true")
     parser.add_argument("--vdirs", help="Report each dir as ingested", action="store_true")
@@ -72,9 +89,9 @@ if __name__ == "__main__":
     if args.delroot:
         fcm.del_root(args.delroot)
         print("Deleted root: ", args.delroot)
-    if args.scans:
-        for (scanid, rootdir, time) in fcm.get_scans():
-            print(scanid, rootdir, time)
+    if args.listscans:
+        for (scanid,when,duration) in fcm.get_scans():
+            print(scanid,  when,duration)
     if args.report:
         m = re.search(r"(\d+)-(\d+)", args.report)
         if not m:
@@ -84,7 +101,7 @@ if __name__ == "__main__":
     if args.jreport:
         fcm.jreport()
     if args.reportdups:
-        fcm.report_dups(fcm.last_scan())
+        report_dups(fcm, min_dupsize=args.min_dupsize, fname_json=args.fname_json)
     if args.scan:
         fcm.scan_enabled_roots()
             

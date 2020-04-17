@@ -132,7 +132,7 @@ class FileScanner(Scanner):
                 # See if this is a zipfile. If so, process it
                 zf = open_zipfile(filename_path)
                 if zf:
-                    self.process_zipfile(root, filename_path, zf)
+                    self.process_zipfile(filename_path, zf)
                 self.filecount += 1
             self.dircount  += 1
 
@@ -150,6 +150,7 @@ class S3Scanner(Scanner):
             #   'StorageClass': 'STANDARD', 
             #   'Key': 'a/b/c/whatever.txt', 
             #   'Size': 31838630}
+            # (ETag is the MD5.)
 
             self.insert_file( path=obj['Key'], mtime=obj['LastModified'], file_size=obj['Size'], hexdigest=obj['ETag'] )
             self.filecount += 1
